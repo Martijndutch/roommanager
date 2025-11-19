@@ -34,3 +34,6 @@ room_working_hours.json
 # IDE
 .vscode/
 .idea/
+*.backup2
+*.broken
+*.original
