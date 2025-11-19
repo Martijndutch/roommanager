@@ -2,6 +2,7 @@ import json
 import requests
 from flask import Flask, request, jsonify, render_template, redirect, session, url_for, make_response
 from flask_cors import CORS
+from flask_session import Session
 from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
@@ -49,6 +50,20 @@ CLIENT_ID = os.getenv('AZURE_CLIENT_ID')
 CLIENT_SECRET = os.getenv('AZURE_CLIENT_SECRET')
 REDIRECT_URI = os.getenv('REDIRECT_URI', 'https://svarc.100pctwifi.nl/arcrooms/auth/callback')
 app.secret_key = os.getenv('FLASK_SECRET_KEY', secrets.token_hex(32))
+
+# Session configuration - server-side storage to prevent cookie size issues
+app.config['SESSION_TYPE'] = 'filesystem'  # Store sessions in filesystem
+app.config['SESSION_FILE_DIR'] = '/tmp/flask_sessions'  # Session storage directory
+app.config['SESSION_PERMANENT'] = False  # Sessions expire on browser close
+app.config['SESSION_USE_SIGNER'] = True  # Sign session cookies
+app.config['SESSION_KEY_PREFIX'] = 'arcrooms:'  # Prefix for session keys
+app.config['SESSION_COOKIE_SECURE'] = True  # Only send over HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=2)  # Session expires after 2 hours
+
+# Initialize Flask-Session
+Session(app)
 
 # Validate required environment variables
 if not all([TENANT, CLIENT_ID, CLIENT_SECRET]):
@@ -194,10 +209,15 @@ def load_working_hours():
 
 def save_working_hours_to_file(room_email, working_hours):
     """Save working hours to local file"""
+    print(f"[DEBUG] save_working_hours_to_file called for {room_email}", flush=True)
+    print(f"[DEBUG] Working hours data: {json.dumps(working_hours, indent=2)}", flush=True)
     all_hours = load_working_hours()
+    print(f"[DEBUG] Loaded existing hours for {len(all_hours)} rooms", flush=True)
     all_hours[room_email] = working_hours
+    print(f"[DEBUG] Writing to file: {WORKING_HOURS_FILE}", flush=True)
     with open(WORKING_HOURS_FILE, 'w') as f:
         json.dump(all_hours, f, indent=2)
+    print(f"[DEBUG] File written successfully", flush=True)
 
 
 
@@ -221,8 +241,6 @@ def get_token():
 
 def get_user_token():
     """Get valid user access token, refreshing if expired"""
-    from datetime import datetime
-    
     access_token = session.get('access_token')
     refresh_token = session.get('refresh_token')
     expires_at_str = session.get('token_expires_at')
@@ -231,51 +249,46 @@ def get_user_token():
         return None
     
     # Check if token is expired or will expire soon (within 5 minutes)
-    if expires_at_str:
+    if expires_at_str and refresh_token:
         try:
             expires_at = datetime.fromisoformat(expires_at_str)
-            from datetime import timedelta
             if datetime.now() >= expires_at - timedelta(minutes=5):
                 # Token expired or expiring soon, try to refresh
-                if refresh_token:
-                    try:
-                        token_data = {
-                            "client_id": CLIENT_ID,
-                            "client_secret": CLIENT_SECRET,
-                            "refresh_token": refresh_token,
-                            "grant_type": "refresh_token",
-                            "scope": "openid profile email User.Read Calendars.ReadWrite"
-                        }
+                try:
+                    token_data = {
+                        "client_id": CLIENT_ID,
+                        "client_secret": CLIENT_SECRET,
+                        "refresh_token": refresh_token,
+                        "grant_type": "refresh_token",
+                        "scope": "openid profile email User.Read Calendars.ReadWrite offline_access"
+                    }
+                    
+                    token_response = requests.post(TOKEN_URL, data=token_data, timeout=10)
+                    if token_response.status_code == 200:
+                        tokens = token_response.json()
+                        new_access_token = tokens.get("access_token")
+                        new_refresh_token = tokens.get("refresh_token", refresh_token)
+                        expires_in = tokens.get("expires_in", 3600)
                         
-                        token_response = requests.post(TOKEN_URL, data=token_data, timeout=10)
-                        if token_response.status_code == 200:
-                            tokens = token_response.json()
-                            new_access_token = tokens.get("access_token")
-                            new_refresh_token = tokens.get("refresh_token", refresh_token)
-                            expires_in = tokens.get("expires_in", 3600)
-                            
-                            # Update session with new tokens
-                            from datetime import timedelta
-                            new_expires_at = datetime.now() + timedelta(seconds=expires_in)
-                            session['access_token'] = new_access_token
-                            session['refresh_token'] = new_refresh_token
-                            session['token_expires_at'] = new_expires_at.isoformat()
-                            
-                            return new_access_token
-                        else:
-                            print(f"Token refresh failed: {token_response.status_code}")
-                            print(f"Response: {token_response.text}")
-                            # Token refresh failed, clear session
-                            return None
-                    except Exception as e:
-                        print(f"Error refreshing token: {str(e)}")
+                        # Update session with new tokens
+                        new_expires_at = datetime.now() + timedelta(seconds=expires_in)
+                        session['access_token'] = new_access_token
+                        session['refresh_token'] = new_refresh_token
+                        session['token_expires_at'] = new_expires_at.isoformat()
+                        
+                        return new_access_token
+                    else:
+                        print(f"Token refresh failed: {token_response.status_code}")
+                        print(f"Response: {token_response.text}")
+                        # Token refresh failed, return None so user needs to re-login
                         return None
-                else:
-                    # No refresh token available
+                except Exception as e:
+                    print(f"Error refreshing token: {str(e)}")
                     return None
         except Exception as e:
             print(f"Error checking token expiration: {str(e)}")
     
+    # Return token even if we can't refresh (will work until it expires)
     return access_token
 
 
@@ -448,11 +461,10 @@ def auth_callback():
     
     tokens = token_response.json()
     access_token = tokens.get("access_token")
-    refresh_token = tokens.get("refresh_token")
+    refresh_token = tokens.get("refresh_token")  # May be None if already consented
     expires_in = tokens.get("expires_in", 3600)  # Default 1 hour
     
     # Calculate token expiration time
-    from datetime import datetime, timedelta
     expires_at = datetime.now() + timedelta(seconds=expires_in)
     
     # Get user info
@@ -461,13 +473,15 @@ def auth_callback():
     
     if user_response.status_code == 200:
         user_data = user_response.json()
+        session.permanent = True  # Make session persistent
         session['user'] = {
             'name': user_data.get('displayName'),
             'email': user_data.get('mail') or user_data.get('userPrincipalName'),
             'id': user_data.get('id')
         }
         session['access_token'] = access_token
-        session['refresh_token'] = refresh_token
+        if refresh_token:
+            session['refresh_token'] = refresh_token
         session['token_expires_at'] = expires_at.isoformat()
         session['login_redirect'] = redirect_to
     
@@ -1118,6 +1132,20 @@ def list_rooms():
         room["delegates"] = get_room_delegates(room.get("emailAddress"), token)
     
     return jsonify({"rooms": rooms_list, "count": len(rooms_list)})
+
+
+@app.get("/arcrooms/api/working-hours/<room_email>")
+def get_working_hours_public(room_email):
+    """Get working hours for a specific room (public endpoint)"""
+    try:
+        all_hours = load_working_hours()
+        room_hours = all_hours.get(room_email, {
+            "timeZone": {"name": "W. Europe Standard Time"},
+            "timeSlots": []
+        })
+        return jsonify(room_hours), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.get("/arcrooms/api/admin/working-hours/<room_email>")

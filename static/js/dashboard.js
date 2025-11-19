@@ -329,13 +329,18 @@ async function loadRoomsData() {
         
         allRoomsData = rooms;
         
-        // Load working hours for each room
+        // Load working hours for each room (use public endpoint)
         for (const room of allRoomsData) {
             try {
-                const whResponse = await fetch(`/arcrooms/api/admin/working-hours/${encodeURIComponent(room.emailAddress)}`);
-                workingHoursData[room.emailAddress] = await whResponse.json();
+                const whResponse = await fetch(`/arcrooms/api/working-hours/${encodeURIComponent(room.emailAddress)}`);
+                if (whResponse.ok) {
+                    workingHoursData[room.emailAddress] = await whResponse.json();
+                } else {
+                    console.log(`No working hours for ${room.displayName}`);
+                    workingHoursData[room.emailAddress] = null;
+                }
             } catch (error) {
-                console.log(`No working hours for ${room.displayName}`);
+                console.log(`Error loading working hours for ${room.displayName}:`, error);
                 workingHoursData[room.emailAddress] = null;
             }
         }
