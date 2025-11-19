@@ -433,7 +433,13 @@ def auth_callback():
     
     token_response = requests.post(TOKEN_URL, data=token_data)
     if token_response.status_code != 200:
-        return f"Error getting token: {token_response.text}", 400
+        error_detail = token_response.json() if token_response.headers.get('content-type', '').startswith('application/json') else token_response.text
+        print(f"Token exchange failed: {token_response.status_code}")
+        print(f"Error detail: {error_detail}")
+        # If user already logged in, just redirect
+        if session.get('user'):
+            return redirect('/arcrooms/')
+        return f"Error getting token: {error_detail}. Please try logging in again.", 400
     
     tokens = token_response.json()
     access_token = tokens.get("access_token")
@@ -813,35 +819,10 @@ def request_meeting():
         })
         
     except Exception as e:
+        import traceback
         print(f"Error in request_meeting: {str(e)}")
+        print(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Fout: {str(e)}"}), 500
-        
-        # Use user token for creating events if logged in, otherwise use app token
-        token = user_token if user_token else app_token
-        
-        # Find the room email from the rooms API (always use app token for this)
-        headers = {
-            "Authorization": f"Bearer {app_token}",
-            "Content-Type": "application/json"
-        }
-        
-        rooms_url = f"{GRAPH_ENDPOINT}/places/microsoft.graph.room"
-        rooms_r = requests.get(rooms_url, headers=headers, timeout=10)
-        
-        room_email = None
-        if rooms_r.status_code == 200:
-            rooms_list = rooms_r.json().get("value", [])
-            print(f"Found {len(rooms_list)} rooms from API")
-            for r in rooms_list:
-                room_name = r.get("displayName", "")
-                print(f"Checking room: {room_name} vs requested: {room}")
-                # Case-insensitive comparison
-                if room_name.lower() == room.lower():
-                    room_email = r.get("emailAddress")
-                    print(f"Matched! Room email: {room_email}")
-                    break
-        else:
-            print(f"Failed to get rooms: {rooms_r.status_code} - {rooms_r.text}")
         
         if not room_email:
             print(f"Room '{room}' not found in available rooms")
