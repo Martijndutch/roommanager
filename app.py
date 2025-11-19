@@ -690,6 +690,15 @@ def get_meetings():
                     if not subject or subject.strip() == "" or subject.strip() == organizer_name.strip():
                         subject = f"Bezet ({organizer_name})" if organizer_name else "Privé (onderwerp verborgen)"
                     
+                    # Get room resource response status from attendees
+                    room_response = "none"  # Default
+                    attendees = event.get("attendees", [])
+                    for attendee in attendees:
+                        attendee_email = attendee.get("emailAddress", {}).get("address", "").lower()
+                        if attendee_email == room_email.lower():
+                            room_response = attendee.get("status", {}).get("response", "none")
+                            break
+                    
                     room_meetings.append({
                         "id": event_id,
                         "room": room.get("displayName"),
@@ -698,6 +707,7 @@ def get_meetings():
                         "start": event.get("start", {}).get("dateTime"),
                         "end": event.get("end", {}).get("dateTime"),
                         "status": event.get("showAs", "busy"),
+                        "roomResponse": room_response,
                         "organizerEmail": organizer_email,
                         "organizerName": organizer.get("name", ""),
                         "body": body_content,
@@ -860,6 +870,15 @@ def get_meetings_parallel():
                     if not subject or subject.strip() == "" or subject.strip() == organizer_name.strip():
                         subject = f"Bezet ({organizer_name})" if organizer_name else "Privé (onderwerp verborgen)"
                     
+                    # Get room resource response status from attendees
+                    room_response = "none"  # Default
+                    attendees = event.get("attendees", [])
+                    for attendee in attendees:
+                        attendee_email = attendee.get("emailAddress", {}).get("address", "").lower()
+                        if attendee_email == room_email.lower():
+                            room_response = attendee.get("status", {}).get("response", "none")
+                            break
+                    
                     room_meetings.append({
                         "id": event_id,
                         "room": room.get("displayName"),
@@ -868,6 +887,7 @@ def get_meetings_parallel():
                         "start": event.get("start", {}).get("dateTime"),
                         "end": event.get("end", {}).get("dateTime"),
                         "status": event.get("showAs", "busy"),
+                        "roomResponse": room_response,
                         "organizerEmail": organizer_email,
                         "organizerName": organizer.get("name", ""),
                         "body": body_content,
