@@ -8,12 +8,6 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 </head>
 <body>
-    <!-- Zoom control -->
-    <div class="zoom-control">
-        <button class="zoom-btn" onclick="setZoom('normal')" id="zoom-normal">100%</button>
-        <button class="zoom-btn" onclick="setZoom('compact')" id="zoom-compact">75%</button>
-    </div>
-
     <div class="header">
         <div class="logo">
             <img src="https://website.storage/Data/ARC/RTE/Afbeeldingen/Algemeen/Jubileumlogo_DEF.jpg" alt="sv ARC">
@@ -25,17 +19,17 @@
     </div>
     <div class="container">
         <div class="left-panel">
-            <h1>Vergaderingen Vandaag</h1>
+            <h1>VERGADERINGEN VANDAAG</h1>
             <div class="date" id="currentDate"></div>
             <div id="todayMeetings" class="loading">Laden...</div>
         </div>
         <div class="right-panel">
             <div class="right-panel-top">
-                <h1>Deze Week</h1>
+                <h1>DEZE WEEK</h1>
                 <div class="calendar-grid" id="weekCalendar"></div>
             </div>
                         <div class="right-panel-bottom">
-                <h1 style="margin-bottom: 15px;">Beschikbaarheid Komende 10 Dagen</h1>
+                <h1 style="margin-bottom: 15px;">BESCHIKBAARHEID KOMENDE 10 DAGEN</h1>
         </div>
     </div>
 

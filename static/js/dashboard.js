@@ -1,27 +1,18 @@
-// Zoom control
+// Zoom control via URL parameter only (for kiosk mode)
 function setZoom(mode) {
-    const body = document.body;
-    const normalBtn = document.getElementById('zoom-normal');
-    const compactBtn = document.getElementById('zoom-compact');
-    
     if (mode === 'compact') {
-        body.classList.add('compact-mode');
-        normalBtn.classList.remove('active');
-        compactBtn.classList.add('active');
-        localStorage.setItem('zoomMode', 'compact');
+        document.body.classList.add('compact-mode');
     } else {
-        body.classList.remove('compact-mode');
-        normalBtn.classList.add('active');
-        compactBtn.classList.remove('active');
-        localStorage.setItem('zoomMode', 'normal');
+        document.body.classList.remove('compact-mode');
     }
 }
 
-// Check URL parameter first, then localStorage
+// Check URL parameter for zoom mode
 const urlParams = new URLSearchParams(window.location.search);
 const urlZoom = urlParams.get('zoom');
-const savedZoom = urlZoom || localStorage.getItem('zoomMode') || 'normal';
-setZoom(savedZoom === 'compact' || savedZoom === '75' ? 'compact' : 'normal');
+if (urlZoom === 'compact' || urlZoom === '75') {
+    setZoom('compact');
+}
 
 function updateClock() {
     const now = new Date();
