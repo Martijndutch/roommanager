@@ -117,6 +117,6 @@
         const isLoggedIn = {{ 'true' if user else 'false' }};
         const loginRedirect = {{ ('true' if user and session.get("login_redirect") == "booking" else 'false') }};
     </script>
-    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}?v=7"></script>
 </body>
 </html>

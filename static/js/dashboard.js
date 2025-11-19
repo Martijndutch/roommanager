@@ -266,8 +266,20 @@ document.getElementById('bookingForm').addEventListener('submit', async function
                 loadMeetings(); // Refresh the meetings list
             }, 2000);
         } else {
-            document.getElementById('errorMessage').textContent = 'Fout: ' + (result.error || 'Onbekende fout');
-            document.getElementById('errorMessage').style.display = 'block';
+            // Check if session expired (401)
+            if (response.status === 401) {
+                document.getElementById('errorMessage').textContent = result.error || 'Uw sessie is verlopen. U wordt doorgestuurd naar de inlogpagina...';
+                document.getElementById('errorMessage').style.display = 'block';
+                
+                // Store pending booking and redirect to login after 2 seconds
+                sessionStorage.setItem('pendingBooking', JSON.stringify(formData));
+                setTimeout(() => {
+                    window.location.href = '/arcrooms/login?redirect=book';
+                }, 2000);
+            } else {
+                document.getElementById('errorMessage').textContent = 'Fout: ' + (result.error || 'Onbekende fout');
+                document.getElementById('errorMessage').style.display = 'block';
+            }
         }
     } catch (error) {
         document.getElementById('errorMessage').textContent = 'Fout bij boeken: ' + error.message;

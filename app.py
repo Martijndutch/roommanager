@@ -219,6 +219,66 @@ def get_token():
     return r.json()["access_token"]
 
 
+def get_user_token():
+    """Get valid user access token, refreshing if expired"""
+    from datetime import datetime
+    
+    access_token = session.get('access_token')
+    refresh_token = session.get('refresh_token')
+    expires_at_str = session.get('token_expires_at')
+    
+    if not access_token:
+        return None
+    
+    # Check if token is expired or will expire soon (within 5 minutes)
+    if expires_at_str:
+        try:
+            expires_at = datetime.fromisoformat(expires_at_str)
+            from datetime import timedelta
+            if datetime.now() >= expires_at - timedelta(minutes=5):
+                # Token expired or expiring soon, try to refresh
+                if refresh_token:
+                    try:
+                        token_data = {
+                            "client_id": CLIENT_ID,
+                            "client_secret": CLIENT_SECRET,
+                            "refresh_token": refresh_token,
+                            "grant_type": "refresh_token",
+                            "scope": "openid profile email User.Read Calendars.ReadWrite"
+                        }
+                        
+                        token_response = requests.post(TOKEN_URL, data=token_data, timeout=10)
+                        if token_response.status_code == 200:
+                            tokens = token_response.json()
+                            new_access_token = tokens.get("access_token")
+                            new_refresh_token = tokens.get("refresh_token", refresh_token)
+                            expires_in = tokens.get("expires_in", 3600)
+                            
+                            # Update session with new tokens
+                            from datetime import timedelta
+                            new_expires_at = datetime.now() + timedelta(seconds=expires_in)
+                            session['access_token'] = new_access_token
+                            session['refresh_token'] = new_refresh_token
+                            session['token_expires_at'] = new_expires_at.isoformat()
+                            
+                            return new_access_token
+                        else:
+                            print(f"Token refresh failed: {token_response.status_code}")
+                            print(f"Response: {token_response.text}")
+                            # Token refresh failed, clear session
+                            return None
+                    except Exception as e:
+                        print(f"Error refreshing token: {str(e)}")
+                        return None
+                else:
+                    # No refresh token available
+                    return None
+        except Exception as e:
+            print(f"Error checking token expiration: {str(e)}")
+    
+    return access_token
+
+
 def get_room_delegates(room_email, token):
     """Get delegates for a room mailbox"""
     try:
@@ -344,7 +404,7 @@ def admin_panel():
 def login():
     redirect_param = request.args.get('redirect', '')
     state = f"{secrets.token_hex(16)}|{redirect_param}"
-    auth_url = f"{AUTH_URL}?client_id={CLIENT_ID}&response_type=code&redirect_uri={REDIRECT_URI}&response_mode=query&scope=openid profile email User.Read Calendars.ReadWrite&state={state}"
+    auth_url = f"{AUTH_URL}?client_id={CLIENT_ID}&response_type=code&redirect_uri={REDIRECT_URI}&response_mode=query&scope=openid profile email User.Read Calendars.ReadWrite offline_access&state={state}"
     return redirect(auth_url)
 
 
@@ -377,6 +437,12 @@ def auth_callback():
     
     tokens = token_response.json()
     access_token = tokens.get("access_token")
+    refresh_token = tokens.get("refresh_token")
+    expires_in = tokens.get("expires_in", 3600)  # Default 1 hour
+    
+    # Calculate token expiration time
+    from datetime import datetime, timedelta
+    expires_at = datetime.now() + timedelta(seconds=expires_in)
     
     # Get user info
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -390,6 +456,8 @@ def auth_callback():
             'id': user_data.get('id')
         }
         session['access_token'] = access_token
+        session['refresh_token'] = refresh_token
+        session['token_expires_at'] = expires_at.isoformat()
         session['login_redirect'] = redirect_to
     
     return redirect('/arcrooms/')
@@ -607,9 +675,13 @@ def request_meeting():
     try:
         # Require login
         user = session.get('user')
-        user_token = session.get('access_token')
+        user_token = get_user_token()
         
         if not user or not user_token:
+            # Clear expired session
+            if user and not user_token:
+                session.clear()
+                return jsonify({"error": "Uw sessie is verlopen. Log opnieuw in om een vergadering te boeken."}), 401
             return jsonify({"error": "Inloggen verplicht. Gebruik 'Inloggen met sv ARC account' knop."}), 401
         
         data = request.json
