@@ -12,14 +12,44 @@ const daysOfWeek = [
 let roomsData = [];
 let dragState = null;
 
+function showLoadingOverlay() {
+    const overlay = document.getElementById('loadingOverlay');
+    overlay.style.display = 'flex';
+}
+
+function hideLoadingOverlay() {
+    const overlay = document.getElementById('loadingOverlay');
+    overlay.style.display = 'none';
+}
+
+function updateLoadingStatus(message, progress = '') {
+    const statusEl = document.getElementById('loadingStatus');
+    const progressEl = document.getElementById('loadingProgress');
+    if (statusEl) statusEl.textContent = message;
+    if (progressEl) progressEl.textContent = progress;
+}
+
 async function loadRooms() {
     try {
+        showLoadingOverlay();
+        updateLoadingStatus('Ruimtes ophalen van server...');
+        
         const response = await fetch('/arcrooms/api/rooms');
         const data = await response.json();
         roomsData = data.rooms || [];
         
+        updateLoadingStatus(`${roomsData.length} ruimtes gevonden`, `✓ Stap 1/2`);
+        await new Promise(resolve => setTimeout(resolve, 300)); // Short delay for UI feedback
+        
         // Load working hours for each room
-        for (let room of roomsData) {
+        updateLoadingStatus('Beschikbaarheid ophalen per ruimte...');
+        for (let i = 0; i < roomsData.length; i++) {
+            const room = roomsData[i];
+            updateLoadingStatus(
+                `Beschikbaarheid laden: ${room.displayName}`,
+                `Ruimte ${i + 1}/${roomsData.length}`
+            );
+            
             const whResponse = await fetch(`/arcrooms/api/admin/working-hours/${encodeURIComponent(room.emailAddress)}`);
             room.workingHours = await whResponse.json();
             room.canEdit = room.workingHours.canEdit !== false; // Default to true if not specified
@@ -35,8 +65,13 @@ async function loadRooms() {
             });
         }
         
+        updateLoadingStatus('Interface opbouwen...', `✓ Stap 2/2`);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
         renderRooms();
+        hideLoadingOverlay();
     } catch (error) {
+        hideLoadingOverlay();
         showStatus('Fout bij laden van ruimtes: ' + error.message, 'error');
     }
 }
