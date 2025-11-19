@@ -13,6 +13,7 @@ import time
 import os
 import re
 from html import escape
+from threading import Lock
 
 app = Flask(__name__, static_url_path='/arcrooms/static')
 
@@ -84,6 +85,57 @@ ROOM_BOOKING_RULES = {
 
 # Working hours storage file
 WORKING_HOURS_FILE = "room_working_hours.json"
+
+# Meeting title cache: {cache_key: {"title": str, "timestamp": datetime}}
+# Cache key format: f"{organizer_email}_{event_start}_{event_end}_{room_name}"
+meeting_title_cache = {}
+meeting_title_cache_lock = Lock()
+CACHE_MAX_AGE_SECONDS = 15 * 60  # 15 minutes
+
+def get_cached_meeting_title(organizer_email, event_start, event_end, room_name):
+    """Retrieve meeting title from cache if available and not expired."""
+    cache_key = f"{organizer_email}_{event_start}_{event_end}_{room_name}"
+    
+    with meeting_title_cache_lock:
+        if cache_key in meeting_title_cache:
+            cached = meeting_title_cache[cache_key]
+            age = (datetime.now() - cached["timestamp"]).total_seconds()
+            
+            if age < CACHE_MAX_AGE_SECONDS:
+                print(f"[CACHE HIT] Using cached title for {organizer_email} (age: {age:.1f}s)", flush=True)
+                return cached["title"]
+            else:
+                # Expired, remove from cache
+                print(f"[CACHE EXPIRED] Removing expired entry for {organizer_email} (age: {age:.1f}s)", flush=True)
+                del meeting_title_cache[cache_key]
+    
+    return None
+
+def cache_meeting_title(organizer_email, event_start, event_end, room_name, title):
+    """Store meeting title in cache."""
+    cache_key = f"{organizer_email}_{event_start}_{event_end}_{room_name}"
+    
+    with meeting_title_cache_lock:
+        meeting_title_cache[cache_key] = {
+            "title": title,
+            "timestamp": datetime.now()
+        }
+        print(f"[CACHE STORE] Cached title for {organizer_email}", flush=True)
+
+def cleanup_expired_cache():
+    """Remove expired entries from cache. Called periodically."""
+    with meeting_title_cache_lock:
+        now = datetime.now()
+        expired_keys = [
+            key for key, value in meeting_title_cache.items()
+            if (now - value["timestamp"]).total_seconds() >= CACHE_MAX_AGE_SECONDS
+        ]
+        
+        for key in expired_keys:
+            del meeting_title_cache[key]
+        
+        if expired_keys:
+            print(f"[CACHE CLEANUP] Removed {len(expired_keys)} expired entries", flush=True)
 
 # ---- Input Validation Functions ----
 
@@ -575,54 +627,64 @@ def get_meetings():
                     # If subject is hidden, try to get it from organizer's calendar
                     subject_is_hidden = (not subject or subject.strip() == "" or subject.strip() == organizer_name.strip())
                     if subject_is_hidden and not is_organizer and organizer_email:
-                        try:
-                            org_calendar_url = f"{GRAPH_ENDPOINT}/users/{organizer_email}/calendar/calendarView"
-                            event_start = event.get("start", {}).get("dateTime")
-                            event_end = event.get("end", {}).get("dateTime")
-                            
+                        event_start = event.get("start", {}).get("dateTime")
+                        event_end = event.get("end", {}).get("dateTime")
+                        room_display = room.get("displayName", "")
+                        
+                        # Check cache first
+                        cached_subject = get_cached_meeting_title(organizer_email, event_start, event_end, room_display)
+                        if cached_subject:
+                            subject = cached_subject
+                        else:
+                            # Cache miss - fetch from API
                             try:
-                                event_dt_str = event_start.split('T')[0] if 'T' in event_start else event_start[:10]
-                                day_start = f"{event_dt_str}T00:00:00.0000000"
-                                day_end = f"{event_dt_str}T23:59:59.9999999"
-                            except:
-                                day_start = event_start
-                                day_end = event_end
-                            
-                            org_params = {
-                                "startDateTime": day_start,
-                                "endDateTime": day_end,
-                                "$select": "id,subject,start,end,location,sensitivity",
-                                "$top": 100
-                            }
-                            org_headers = headers.copy()
-                            org_headers["Prefer"] = 'outlook.timezone="Europe/Amsterdam"'
-                            org_response = requests.get(org_calendar_url, headers=org_headers, params=org_params, timeout=5)
-                            
-                            if org_response.status_code == 200:
-                                org_events = org_response.json().get("value", [])
+                                org_calendar_url = f"{GRAPH_ENDPOINT}/users/{organizer_email}/calendar/calendarView"
                                 
-                                for org_event in org_events:
-                                    org_start = org_event.get("start", {}).get("dateTime")
-                                    org_end = org_event.get("end", {}).get("dateTime")
-                                    org_location = org_event.get("location", {})
-                                    org_location_name = org_location.get("displayName", "") if isinstance(org_location, dict) else str(org_location)
+                                try:
+                                    event_dt_str = event_start.split('T')[0] if 'T' in event_start else event_start[:10]
+                                    day_start = f"{event_dt_str}T00:00:00.0000000"
+                                    day_end = f"{event_dt_str}T23:59:59.9999999"
+                                except:
+                                    day_start = event_start
+                                    day_end = event_end
+                                
+                                org_params = {
+                                    "startDateTime": day_start,
+                                    "endDateTime": day_end,
+                                    "$select": "id,subject,start,end,location,sensitivity",
+                                    "$top": 100
+                                }
+                                org_headers = headers.copy()
+                                org_headers["Prefer"] = 'outlook.timezone="Europe/Amsterdam"'
+                                org_response = requests.get(org_calendar_url, headers=org_headers, params=org_params, timeout=5)
+                                
+                                if org_response.status_code == 200:
+                                    org_events = org_response.json().get("value", [])
                                     
-                                    time_match = (org_start == event_start and org_end == event_end)
-                                    room_display = room.get("displayName", "")
-                                    location_match = room_display and room_display.lower() in org_location_name.lower()
-                                    
-                                    if time_match or location_match:
-                                        org_subject = org_event.get("subject", "")
-                                        org_sensitivity = org_event.get("sensitivity", "normal")
+                                    for org_event in org_events:
+                                        org_start = org_event.get("start", {}).get("dateTime")
+                                        org_end = org_event.get("end", {}).get("dateTime")
+                                        org_location = org_event.get("location", {})
+                                        org_location_name = org_location.get("displayName", "") if isinstance(org_location, dict) else str(org_location)
                                         
-                                        if org_subject and org_subject.strip():
-                                            if org_sensitivity == "private":
-                                                subject = f"Bezet ({organizer_name})" if organizer_name else "Bezet"
-                                            else:
-                                                subject = f"{org_subject} ({organizer_name})" if (organizer_name and organizer_email != room_email) else org_subject
-                                            break
-                        except Exception as e:
-                            print(f"Could not retrieve subject from organizer {organizer_email}: {str(e)}", flush=True)
+                                        time_match = (org_start == event_start and org_end == event_end)
+                                        location_match = room_display and room_display.lower() in org_location_name.lower()
+                                        
+                                        if time_match or location_match:
+                                            org_subject = org_event.get("subject", "")
+                                            org_sensitivity = org_event.get("sensitivity", "normal")
+                                            
+                                            if org_subject and org_subject.strip():
+                                                if org_sensitivity == "private":
+                                                    subject = f"Bezet ({organizer_name})" if organizer_name else "Bezet"
+                                                else:
+                                                    subject = f"{org_subject} ({organizer_name})" if (organizer_name and organizer_email != room_email) else org_subject
+                                                
+                                                # Cache the retrieved title
+                                                cache_meeting_title(organizer_email, event_start, event_end, room_display, subject)
+                                                break
+                            except Exception as e:
+                                print(f"Could not retrieve subject from organizer {organizer_email}: {str(e)}", flush=True)
                     
                     # Final fallback
                     if not subject or subject.strip() == "" or subject.strip() == organizer_name.strip():
@@ -665,6 +727,9 @@ def get_meetings():
                     all_meetings.extend(meetings)
                 except Exception as e:
                     print(f"Error fetching calendar for room {room.get('emailAddress')}: {str(e)}", flush=True)
+        
+        # Cleanup expired cache entries
+        cleanup_expired_cache()
         
         return jsonify({"meetings": all_meetings, "count": len(all_meetings)})
     except Exception as e:
