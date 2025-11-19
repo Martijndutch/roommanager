@@ -8,6 +8,12 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 </head>
 <body>
+    <!-- Zoom control -->
+    <div class="zoom-control">
+        <button class="zoom-btn" onclick="setZoom('normal')" id="zoom-normal">100%</button>
+        <button class="zoom-btn" onclick="setZoom('compact')" id="zoom-compact">75%</button>
+    </div>
+
     <div class="header">
         <div class="logo">
             <img src="https://website.storage/Data/ARC/RTE/Afbeeldingen/Algemeen/Jubileumlogo_DEF.jpg" alt="sv ARC">
@@ -28,10 +34,8 @@
                 <h1>Deze Week</h1>
                 <div class="calendar-grid" id="weekCalendar"></div>
             </div>
-            <div class="right-panel-bottom">
-                <div class="availability-title">Beschikbaarheid Komende 10 Dagen</div>
-                <div id="availabilityGrid" class="loading">Laden...</div>
-            </div>
+                        <div class="right-panel-bottom">
+                <h1 style="margin-bottom: 15px;">Beschikbaarheid Komende 10 Dagen</h1>
         </div>
     </div>
 

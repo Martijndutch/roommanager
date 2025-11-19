@@ -3,6 +3,30 @@
     padding: 0;
     box-sizing: border-box;
 }
+
+/* Zoom control variables */
+:root {
+    --zoom-scale: 1;
+    --header-padding: 15px 40px;
+    --logo-height: 60px;
+    --logo-font-size: 2em;
+    --clock-font-size: 1.8em;
+    --section-padding: 20px;
+    --section-margin: 15px;
+    --font-size-base: 16px;
+}
+
+body.compact-mode {
+    --zoom-scale: 0.75;
+    --header-padding: 8px 20px;
+    --logo-height: 40px;
+    --logo-font-size: 1.3em;
+    --clock-font-size: 1.2em;
+    --section-padding: 12px;
+    --section-margin: 8px;
+    --font-size-base: 13px;
+}
+
 body {
     font-family: Arial, Helvetica, sans-serif;
     background: #1a1a1a;
@@ -14,6 +38,7 @@ body {
     height: 100vh;
     overflow: hidden;
     position: relative;
+    font-size: var(--font-size-base);
 }
 body::before {
     content: '';
@@ -25,9 +50,45 @@ body::before {
     background: rgba(0, 0, 0, 0.75);
     z-index: 0;
 }
+
+/* Zoom control button */
+.zoom-control {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+    display: flex;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 8px;
+    border-radius: 8px;
+    border: 2px solid #e30613;
+}
+
+.zoom-btn {
+    background: #e30613;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: bold;
+    transition: background 0.3s;
+}
+
+.zoom-btn:hover {
+    background: #c00511;
+}
+
+.zoom-btn.active {
+    background: #fff;
+    color: #e30613;
+}
+
 .header {
     background: rgba(0, 0, 0, 0.95);
-    padding: 15px 40px;
+    padding: var(--header-padding);
     box-shadow: 0 2px 10px rgba(0,0,0,0.3);
     display: flex;
     align-items: center;
@@ -42,11 +103,11 @@ body::before {
     gap: 15px;
 }
 .logo img {
-    height: 60px;
+    height: var(--logo-height);
     width: auto;
 }
 .logo-text {
-    font-size: 2em;
+    font-size: var(--logo-font-size);
     font-weight: bold;
     color: #fff;
     text-transform: uppercase;
@@ -129,23 +190,28 @@ body::before {
     background: #555;
 }
 .clock {
-    font-size: 1.5em;
+    font-size: var(--clock-font-size);
     color: #fff;
     font-weight: 300;
 }
 .container {
     display: flex;
     height: calc(100vh - 80px);
-    padding: 20px;
-    gap: 20px;
+    padding: var(--section-margin);
+    gap: var(--section-margin);
     position: relative;
     z-index: 1;
 }
+
+body.compact-mode .container {
+    height: calc(100vh - 56px);
+}
+
 .left-panel {
     flex: 1;
     background: rgba(255, 255, 255, 0.98);
     border-radius: 10px;
-    padding: 30px;
+    padding: var(--section-padding);
     box-shadow: 0 5px 30px rgba(227, 6, 19, 0.2);
     overflow-y: auto;
     border-top: 4px solid #e30613;
@@ -154,13 +220,13 @@ body::before {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: var(--section-margin);
 }
 .right-panel-top {
     flex: 1;
     background: rgba(255, 255, 255, 0.98);
     border-radius: 10px;
-    padding: 30px;
+    padding: var(--section-padding);
     box-shadow: 0 5px 30px rgba(227, 6, 19, 0.2);
     overflow-y: auto;
     border-top: 4px solid #e30613;
@@ -169,9 +235,15 @@ body::before {
     height: 380px;
     background: rgba(255, 255, 255, 0.98);
     border-radius: 10px;
-    padding: 20px;
+    padding: var(--section-padding);
     box-shadow: 0 5px 30px rgba(227, 6, 19, 0.2);
     border-top: 4px solid #e30613;
+    overflow-y: auto;
+}
+
+body.compact-mode .right-panel-bottom {
+    height: 280px;
+}
     overflow-x: auto;
 }
 h1 {
@@ -183,12 +255,26 @@ h1 {
     padding-bottom: 10px;
     font-weight: 700;
 }
+
+body.compact-mode h1 {
+    font-size: 1.6em;
+    margin-bottom: 6px;
+    padding-bottom: 6px;
+}
+
 .date {
     font-size: 1.1em;
     color: #666;
     margin-bottom: 25px;
     margin-top: 10px;
 }
+
+body.compact-mode .date {
+    font-size: 0.95em;
+    margin-bottom: 12px;
+    margin-top: 6px;
+}
+
 .meeting {
     background: #f8f8f8;
     border-left: 5px solid #e30613;
@@ -196,6 +282,11 @@ h1 {
     margin-bottom: 15px;
     border-radius: 5px;
     transition: all 0.3s;
+}
+
+body.compact-mode .meeting {
+    padding: 12px;
+    margin-bottom: 8px;
 }
 .meeting:hover {
     transform: translateX(8px);
@@ -337,6 +428,13 @@ h1 {
     gap: 2px;
     font-size: 0.75em;
 }
+
+body.compact-mode .availability-grid {
+    grid-template-columns: 100px repeat(10, 1fr);
+    gap: 1px;
+    font-size: 0.65em;
+}
+
 .availability-header {
     padding: 6px 2px;
     text-align: center;
@@ -344,6 +442,12 @@ h1 {
     color: #666;
     font-size: 0.7em;
 }
+
+body.compact-mode .availability-header {
+    padding: 4px 1px;
+    font-size: 0.65em;
+}
+
 .availability-room {
     padding: 8px 6px;
     font-weight: bold;
@@ -357,6 +461,12 @@ h1 {
     transition: all 0.2s;
     font-size: 0.85em;
 }
+
+body.compact-mode .availability-room {
+    padding: 5px 4px;
+    font-size: 0.75em;
+}
+
 .availability-room:hover {
     background: #e30613;
     color: white;
@@ -375,6 +485,12 @@ h1 {
     justify-content: center;
     border: 1px solid #e5e5e5;
 }
+
+body.compact-mode .availability-cell {
+    min-height: 28px;
+    padding: 5px 2px;
+}
+
 .availability-cell.busy {
     background: #f44336;
 }
@@ -397,6 +513,10 @@ h1 {
     height: 100%;
     font-size: 0.7em;
     font-weight: bold;
+}
+
+body.compact-mode .availability-time-sections {
+    font-size: 0.6em;
 }
 .availability-time-section {
     text-align: center;
