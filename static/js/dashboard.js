@@ -89,6 +89,9 @@ function populateTimeSlots(existingMeetings) {
     const startSelect = document.getElementById('startTime');
     const endSelect = document.getElementById('endTime');
     
+    // Debug: Log existing meetings
+    console.log('Existing meetings for time slot calculation:', existingMeetings);
+    
     // Clear existing options
     startSelect.innerHTML = '<option value="">-- Selecteer starttijd --</option>';
     endSelect.innerHTML = '<option value="">-- Selecteer eindtijd --</option>';
@@ -139,11 +142,23 @@ function populateTimeSlots(existingMeetings) {
         
         // Check if this slot overlaps with any existing meeting
         for (let meeting of existingMeetings) {
+            // Parse the ISO datetime string (format: "2025-11-26T08:00:00")
+            // This is already in local time (Europe/Amsterdam) from the API
             const meetingStart = new Date(meeting.start);
             const meetingEnd = new Date(meeting.end);
-            const meetingStartTime = new Date(`2000-01-01T${meetingStart.getHours().toString().padStart(2, '0')}:${meetingStart.getMinutes().toString().padStart(2, '0')}:00`);
-            const meetingEndTime = new Date(`2000-01-01T${meetingEnd.getHours().toString().padStart(2, '0')}:${meetingEnd.getMinutes().toString().padStart(2, '0')}:00`);
             
+            // Extract hours and minutes for time-only comparison
+            const meetingStartHours = meetingStart.getHours();
+            const meetingStartMinutes = meetingStart.getMinutes();
+            const meetingEndHours = meetingEnd.getHours();
+            const meetingEndMinutes = meetingEnd.getMinutes();
+            
+            // Create time-only dates for comparison (same date, different times)
+            const meetingStartTime = new Date(`2000-01-01T${meetingStartHours.toString().padStart(2, '0')}:${meetingStartMinutes.toString().padStart(2, '0')}:00`);
+            const meetingEndTime = new Date(`2000-01-01T${meetingEndHours.toString().padStart(2, '0')}:${meetingEndMinutes.toString().padStart(2, '0')}:00`);
+            
+            // A slot is occupied if it starts within a meeting's time range
+            // (slotTime >= meetingStartTime && slotTime < meetingEndTime)
             if (slotTime >= meetingStartTime && slotTime < meetingEndTime) {
                 return false; // Slot is occupied
             }
@@ -205,12 +220,22 @@ function populateTimeSlots(existingMeetings) {
             // Check if the entire time range is available
             let rangeAvailable = true;
             for (let meeting of existingMeetings) {
+                // Parse the ISO datetime string (format: "2025-11-26T08:00:00")
                 const meetingStart = new Date(meeting.start);
                 const meetingEnd = new Date(meeting.end);
-                const meetingStartTime = new Date(`2000-01-01T${meetingStart.getHours().toString().padStart(2, '0')}:${meetingStart.getMinutes().toString().padStart(2, '0')}:00`);
-                const meetingEndTime = new Date(`2000-01-01T${meetingEnd.getHours().toString().padStart(2, '0')}:${meetingEnd.getMinutes().toString().padStart(2, '0')}:00`);
                 
-                // Check if the range overlaps with existing meeting
+                // Extract hours and minutes for time-only comparison
+                const meetingStartHours = meetingStart.getHours();
+                const meetingStartMinutes = meetingStart.getMinutes();
+                const meetingEndHours = meetingEnd.getHours();
+                const meetingEndMinutes = meetingEnd.getMinutes();
+                
+                // Create time-only dates for comparison
+                const meetingStartTime = new Date(`2000-01-01T${meetingStartHours.toString().padStart(2, '0')}:${meetingStartMinutes.toString().padStart(2, '0')}:00`);
+                const meetingEndTime = new Date(`2000-01-01T${meetingEndHours.toString().padStart(2, '0')}:${meetingEndMinutes.toString().padStart(2, '0')}:00`);
+                
+                // Check if the range [startTimeDate, endTime] overlaps with [meetingStartTime, meetingEndTime]
+                // Ranges overlap if: NOT (endTime <= meetingStartTime OR startTimeDate >= meetingEndTime)
                 if (!(endTime <= meetingStartTime || startTimeDate >= meetingEndTime)) {
                     rangeAvailable = false;
                     break;
