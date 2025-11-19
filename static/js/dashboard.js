@@ -357,8 +357,8 @@ async function loadRoomsData() {
         
         allRoomsData = rooms;
         
-        // Load working hours for each room (use public endpoint)
-        for (const room of allRoomsData) {
+        // Load working hours for all rooms in PARALLEL
+        const workingHoursPromises = allRoomsData.map(async (room) => {
             try {
                 const whResponse = await fetch(`/arcrooms/api/working-hours/${encodeURIComponent(room.emailAddress)}`);
                 if (whResponse.ok) {
@@ -371,7 +371,10 @@ async function loadRoomsData() {
                 console.log(`Error loading working hours for ${room.displayName}:`, error);
                 workingHoursData[room.emailAddress] = null;
             }
-        }
+        });
+        
+        // Wait for all working hours to load
+        await Promise.all(workingHoursPromises);
     } catch (error) {
         console.error('Error loading rooms data:', error);
     }
@@ -625,13 +628,19 @@ function renderGrid(rooms, meetings) {
 
 // Laad direct en ververs elke 5 minuten
 async function init() {
-    await loadRoomsData();
-    await loadMeetings();
+    // Load rooms and meetings in PARALLEL for faster initial load
+    await Promise.all([
+        loadRoomsData(),
+        loadMeetings()
+    ]);
 }
 init();
 setInterval(async () => {
-    await loadRoomsData();
-    await loadMeetings();
+    // Refresh rooms and meetings in parallel
+    await Promise.all([
+        loadRoomsData(),
+        loadMeetings()
+    ]);
 }, 5 * 60 * 1000);
 
 // ---- Meeting Details, Edit, Delete Functions ----
