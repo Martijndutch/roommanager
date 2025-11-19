@@ -327,6 +327,9 @@ function updateBlockData(roomIndex, dayIndex, blockIndex) {
         <div class="resize-handle right"></div>
         ${deleteBtn}
     `;
+    
+    // Re-attach event listeners to the new handles
+    setupDragAndResize();
 }
 
 function deleteTimeBlock(roomIndex, dayIndex, blockIndex) {

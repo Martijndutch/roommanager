@@ -252,16 +252,25 @@ transparent 95.833%, transparent 100%
     position: absolute;
     top: 0;
     bottom: 0;
-    width: 8px;
+    width: 10px;
     cursor: ew-resize;
+    z-index: 10;
+    background: rgba(255, 255, 255, 0.3);
+    transition: background 0.2s;
+}
+
+.resize-handle:hover {
+    background: rgba(255, 255, 255, 0.6);
 }
 
 .resize-handle.left {
     left: 0;
+    border-right: 2px solid rgba(255, 255, 255, 0.5);
 }
 
 .resize-handle.right {
     right: 0;
+    border-left: 2px solid rgba(255, 255, 255, 0.5);
 }
 
 .btn {
