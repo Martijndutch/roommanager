@@ -417,6 +417,11 @@ def auth_callback():
     if not code:
         return "Error: No authorization code received", 400
     
+    # Check if user is already logged in (code may have been redeemed already)
+    if session.get('user') and session.get('access_token'):
+        print("User already logged in, skipping token exchange")
+        return redirect('/arcrooms/')
+    
     # Extract redirect info from state
     redirect_to = ''
     if '|' in state:
