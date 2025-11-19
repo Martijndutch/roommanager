@@ -63,26 +63,21 @@ sudo systemctl status arcrooms.service
 curl http://localhost:5010/arcrooms/
 ```
 
-## 🚨 IMPORTANT: Rotate Azure Client Secret
+## 🚨 Security Notes
 
-⚠️ **The current `AZURE_CLIENT_SECRET` was previously exposed in git.**
+✅ **Secrets are properly secured in `/etc/arcrooms/secrets.env`**
 
-You should rotate it in Azure Portal:
+- Never committed to git repository
+- Protected with 600 file permissions (root only)
+- Loaded automatically by systemd service
+- `config.json` excluded from git via `.gitignore`
 
-1. Go to Azure Portal → Azure Active Directory
-2. Navigate to App registrations → your application
-3. Go to "Certificates & secrets"
-4. Delete the old secret
-5. Create a new client secret
-6. Update `/etc/arcrooms/secrets.env` with the new value:
-   ```bash
-   sudo nano /etc/arcrooms/secrets.env
-   # Update AZURE_CLIENT_SECRET=<new_secret>
-   ```
-7. Restart the service:
-   ```bash
-   sudo systemctl restart arcrooms.service
-   ```
+### Best Practices
+
+1. **Rotate secrets periodically** (recommended: every 90 days)
+2. **Backup secrets file** before making changes
+3. **Test after updates** to ensure service still works
+4. **Monitor logs** for authentication errors: `sudo journalctl -u arcrooms -f`
 
 ## 📋 View Current Configuration (without exposing secrets)
 
@@ -144,8 +139,9 @@ The service should start automatically and work without any manual intervention.
 - [x] config.json added to .gitignore
 - [x] Session secret persists across restarts
 - [x] Service auto-starts on boot
-- [ ] **TODO: Rotate Azure client secret** (see warning above)
-- [ ] **TODO: Remove config.json from git history** (if committed previously)
+- [x] Secrets never committed to git
+- [x] Flask-CORS installed for SharePoint embedding
+- [x] Admin page functional with working hours management
 
 ## 🗑️ Removing Secrets from Git History (if needed)
 

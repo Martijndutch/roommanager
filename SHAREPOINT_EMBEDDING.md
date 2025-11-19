@@ -114,7 +114,8 @@ The embedded iframe works on mobile SharePoint apps, but consider:
 
 1. **Set appropriate height**: Use `height="800px"` or adjust based on content
 2. **Lazy loading**: Add `loading="lazy"` to iframe for better page performance
-3. **Cache headers**: Already configured for static assets
+3. **Cache control**: Static files have cache-busting headers to prevent stale JavaScript
+4. **Version parameters**: Admin page uses `?v=X` parameters for cache invalidation
 
 ## Security Notes
 
@@ -132,9 +133,21 @@ Before deploying to production SharePoint:
 3. Verify mobile experience
 4. Test authentication flow with different user roles
 
+## Admin Page Access
+
+The admin page is available at `/arcrooms/admin` and allows delegate users to:
+- View all rooms they have access to
+- Configure working hours with visual time blocks
+- Drag and resize time slots (30-minute snapping)
+- Save changes to local storage (no Exchange modification)
+
+**Note**: Admin page only queries Exchange for room listings. Working hours are stored locally and checked when users request bookings.
+
 ## Next Steps (Optional Enhancements)
 
 1. **Single Sign-On**: Implement token passing from SharePoint context
 2. **Deep Linking**: Add URL parameters for specific rooms/dates
 3. **Responsive Heights**: Use postMessage API to auto-adjust iframe height
 4. **SharePoint Theme**: Match SharePoint's color scheme dynamically
+5. **CSRF Protection**: Add Flask-WTF for form security
+6. **Rate Limiting**: Implement Flask-Limiter for API endpoints
