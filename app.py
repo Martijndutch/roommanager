@@ -600,7 +600,7 @@ def get_meetings():
                 params = {
                     "startDateTime": start.isoformat(),
                     "endDateTime": end.isoformat(),
-                    "$select": "id,subject,start,end,showAs,body,organizer,location,isOrganizer,isCancelled,responseStatus,webLink",
+                    "$select": "id,subject,start,end,showAs,body,organizer,location,isOrganizer,isCancelled,responseStatus,attendees,webLink",
                     "$top": 100
                 }
                 
@@ -779,7 +779,7 @@ def get_meetings_parallel():
                 params = {
                     "startDateTime": start.isoformat(),
                     "endDateTime": end.isoformat(),
-                    "$select": "id,subject,start,end,showAs,body,organizer,location,isOrganizer,isCancelled,responseStatus,webLink",
+                    "$select": "id,subject,start,end,showAs,body,organizer,location,isOrganizer,isCancelled,responseStatus,attendees,webLink",
                     "$top": 100
                 }
                 

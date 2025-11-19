@@ -406,13 +406,16 @@ async function loadMeetings() {
             todayContainer.innerHTML = '<div class="no-meetings">Geen vergaderingen gepland voor vandaag</div>';
         } else {
             todayMeetings.sort((a, b) => new Date(a.start) - new Date(b.start));
-            todayContainer.innerHTML = todayMeetings.map(meeting => `
+            todayContainer.innerHTML = todayMeetings.map(meeting => {
+                const isPending = meeting.roomResponse === 'none' || meeting.roomResponse === 'tentativelyAccepted';
+                const statusText = isPending ? ' (wacht op goedkeuring)' : '';
+                return `
                 <div class="meeting" onclick="window.open('https://outlook.office365.com/calendar/item/${encodeURIComponent(meeting.id)}', 'outlook', 'width=1000,height=800,scrollbars=yes,resizable=yes')" style="cursor: pointer;">
                     <div class="meeting-time">${formatTime(meeting.start)} - ${formatTime(meeting.end)}</div>
                     <div class="meeting-title">${meeting.subject}</div>
-                    <div class="meeting-location">📍 ${meeting.room}</div>
+                    <div class="meeting-location">📍 ${meeting.room}${statusText}</div>
                 </div>
-            `).join('');
+            `}).join('');
         }
 
         // Komende 5 dagen kalender
@@ -446,13 +449,16 @@ async function loadMeetings() {
                     <div class="day-header">${day.date.toLocaleDateString('nl-NL', { weekday: 'long' })}</div>
                     <div class="day-date">${day.date.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' })}</div>
                     ${dayMeetings.length === 0 ? '<div style="text-align: center; color: #ccc; font-size: 0.9em; padding: 20px;">Geen vergaderingen</div>' : 
-                        dayMeetings.map(m => `
+                        dayMeetings.map(m => {
+                            const isPending = m.roomResponse === 'none' || m.roomResponse === 'tentativelyAccepted';
+                            const statusText = isPending ? ' (wacht op goedkeuring)' : '';
+                            return `
                             <div class="mini-meeting" onclick="window.open('https://outlook.office365.com/calendar/item/${encodeURIComponent(m.id)}', 'outlook', 'width=1000,height=800,scrollbars=yes,resizable=yes')" style="cursor: pointer;">
                                 <div class="mini-meeting-time">${formatTime(m.start)}</div>
                                 <div class="mini-meeting-title">${m.subject}</div>
-                                <div class="mini-meeting-room">${m.room}</div>
+                                <div class="mini-meeting-room">${m.room}${statusText}</div>
                             </div>
-                        `).join('')
+                        `}).join('')
                     }
                 </div>
             `;
