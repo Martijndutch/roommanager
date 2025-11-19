@@ -407,7 +407,8 @@ async function loadMeetings() {
         } else {
             todayMeetings.sort((a, b) => new Date(a.start) - new Date(b.start));
             todayContainer.innerHTML = todayMeetings.map(meeting => {
-                const isPending = meeting.roomResponse === 'none' || meeting.roomResponse === 'tentativelyAccepted';
+                // Only show pending status if room is NOT the organizer (invited meetings only)
+                const isPending = !meeting.isOrganizer && (meeting.roomResponse === 'none' || meeting.roomResponse === 'tentativelyAccepted');
                 const statusText = isPending ? ' (wacht op goedkeuring)' : '';
                 return `
                 <div class="meeting" onclick="window.open('https://outlook.office365.com/calendar/item/${encodeURIComponent(meeting.id)}', 'outlook', 'width=1000,height=800,scrollbars=yes,resizable=yes')" style="cursor: pointer;">
@@ -450,7 +451,8 @@ async function loadMeetings() {
                     <div class="day-date">${day.date.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' })}</div>
                     ${dayMeetings.length === 0 ? '<div style="text-align: center; color: #ccc; font-size: 0.9em; padding: 20px;">Geen vergaderingen</div>' : 
                         dayMeetings.map(m => {
-                            const isPending = m.roomResponse === 'none' || m.roomResponse === 'tentativelyAccepted';
+                            // Only show pending status if room is NOT the organizer (invited meetings only)
+                            const isPending = !m.isOrganizer && (m.roomResponse === 'none' || m.roomResponse === 'tentativelyAccepted');
                             const statusText = isPending ? ' (wacht op goedkeuring)' : '';
                             return `
                             <div class="mini-meeting" onclick="window.open('https://outlook.office365.com/calendar/item/${encodeURIComponent(m.id)}', 'outlook', 'width=1000,height=800,scrollbars=yes,resizable=yes')" style="cursor: pointer;">
