@@ -7,9 +7,11 @@ function setZoom(mode) {
     }
 }
 
-// Check URL parameter for zoom mode
+// Check URL parameter for zoom mode and room filter
 const urlParams = new URLSearchParams(window.location.search);
 const urlZoom = urlParams.get('zoom');
+const filterRoomEmail = urlParams.get('room'); // Filter by room email address
+
 if (urlZoom === 'compact' || urlZoom === '75') {
     setZoom('compact');
 }
@@ -299,7 +301,21 @@ async function loadRoomsData() {
     try {
         const response = await fetch('/arcrooms/api/rooms');
         const data = await response.json();
-        allRoomsData = data.rooms || [];
+        let rooms = data.rooms || [];
+        
+        // Filter by room email if specified in URL
+        if (filterRoomEmail) {
+            rooms = rooms.filter(room => room.emailAddress.toLowerCase() === filterRoomEmail.toLowerCase());
+            
+            // Show filter indicator
+            if (rooms.length > 0) {
+                const filterDiv = document.getElementById('roomFilter');
+                filterDiv.textContent = `🔍 Filter actief: ${rooms[0].displayName}`;
+                filterDiv.style.display = 'block';
+            }
+        }
+        
+        allRoomsData = rooms;
         
         // Load working hours for each room
         for (const room of allRoomsData) {
@@ -320,7 +336,13 @@ async function loadMeetings() {
     try {
         const response = await fetch('/arcrooms/api/meetings');
         const data = await response.json();
-        const meetings = data.meetings;
+        let meetings = data.meetings;
+        
+        // Filter meetings by room if specified in URL
+        if (filterRoomEmail) {
+            const filteredRoomNames = allRoomsData.map(r => r.displayName);
+            meetings = meetings.filter(m => filteredRoomNames.includes(m.room));
+        }
         
         // Store all meetings for use
         allMeetingsData = meetings;
