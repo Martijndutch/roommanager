@@ -160,11 +160,14 @@ function populateTimeSlots(existingMeetings) {
             // A slot is occupied if it starts within a meeting's time range
             // (slotTime >= meetingStartTime && slotTime < meetingEndTime)
             if (slotTime >= meetingStartTime && slotTime < meetingEndTime) {
+                console.log(`Slot ${slot} blocked by meeting: ${meeting.subject} (${meetingStartHours}:${meetingStartMinutes.toString().padStart(2, '0')} - ${meetingEndHours}:${meetingEndMinutes.toString().padStart(2, '0')})`);
                 return false; // Slot is occupied
             }
         }
         return true;
     });
+    
+    console.log('Available start time slots:', availableSlots);
     
     // Populate start time options
     availableSlots.forEach(slot => {
