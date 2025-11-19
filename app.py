@@ -8,6 +8,8 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import secrets
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 import os
 import re
 from html import escape
@@ -412,6 +414,12 @@ def admin_panel():
     return render_template('admin.html', user=user)
 
 
+@app.get("/arcrooms/performance-test")
+def performance_test():
+    """Performance testing page for comparing sequential vs parallel loading"""
+    return render_template('performance-test.html')
+
+
 # ---- Login endpoint ----
 @app.get("/arcrooms/login")
 def login():
@@ -506,6 +514,9 @@ def clear_redirect():
 # ---- API endpoint: get all meetings for dashboard ----
 @app.get("/arcrooms/api/meetings")
 def get_meetings():
+    """
+    Get all meetings with PARALLEL loading for better performance
+    """
     try:
         token = get_token()
         headers = {
@@ -522,19 +533,17 @@ def get_meetings():
         for room in rooms_r.json().get("value", []):
             all_rooms[room["id"]] = room
         
-        # Get schedules for next 10 days (increased from 5)
+        # Get schedules for next 10 days
         start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         end = start + timedelta(days=10)
         
-        all_meetings = []
-        
-        for room_id, room in all_rooms.items():
+        def fetch_room_calendar(room_id, room):
+            """Fetch calendar for a single room"""
             room_email = room.get("emailAddress")
             if not room_email:
-                continue
+                return []
             
             try:
-                # Get calendar events from room calendar
                 calendar_url = f"{GRAPH_ENDPOINT}/users/{room_email}/calendar/calendarView"
                 params = {
                     "startDateTime": start.isoformat(),
@@ -548,104 +557,303 @@ def get_meetings():
                 
                 calendar_r = requests.get(calendar_url, headers=calendar_headers, params=params, timeout=10)
                 
-                if calendar_r.status_code == 200:
-                    events = calendar_r.json().get("value", [])
-                    for event in events:
-                        subject = event.get("subject", "")
-                        organizer = event.get("organizer", {}).get("emailAddress", {})
-                        organizer_name = organizer.get("name", "")
-                        organizer_email = organizer.get("address", "")
-                        body_content = event.get("body", {}).get("content", "")
-                        event_id = event.get("id")
-                        is_organizer = event.get("isOrganizer", False)
-                        
-                        # If subject is hidden (empty or just organizer name) and room is not organizer, try to get it from organizer's calendar
-                        # Exchange shows just the organizer name when privacy is enabled
-                        subject_is_hidden = (not subject or subject.strip() == "" or subject.strip() == organizer_name.strip())
-                        if subject_is_hidden and not is_organizer and organizer_email:
+                if calendar_r.status_code != 200:
+                    return []
+                
+                events = calendar_r.json().get("value", [])
+                room_meetings = []
+                
+                for event in events:
+                    subject = event.get("subject", "")
+                    organizer = event.get("organizer", {}).get("emailAddress", {})
+                    organizer_name = organizer.get("name", "")
+                    organizer_email = organizer.get("address", "")
+                    body_content = event.get("body", {}).get("content", "")
+                    event_id = event.get("id")
+                    is_organizer = event.get("isOrganizer", False)
+                    
+                    # If subject is hidden, try to get it from organizer's calendar
+                    subject_is_hidden = (not subject or subject.strip() == "" or subject.strip() == organizer_name.strip())
+                    if subject_is_hidden and not is_organizer and organizer_email:
+                        try:
+                            org_calendar_url = f"{GRAPH_ENDPOINT}/users/{organizer_email}/calendar/calendarView"
+                            event_start = event.get("start", {}).get("dateTime")
+                            event_end = event.get("end", {}).get("dateTime")
+                            
                             try:
-                                # Query organizer's calendar for this event to get the real subject
-                                org_calendar_url = f"{GRAPH_ENDPOINT}/users/{organizer_email}/calendar/calendarView"
-                                event_start = event.get("start", {}).get("dateTime")
-                                event_end = event.get("end", {}).get("dateTime")
+                                event_dt_str = event_start.split('T')[0] if 'T' in event_start else event_start[:10]
+                                day_start = f"{event_dt_str}T00:00:00.0000000"
+                                day_end = f"{event_dt_str}T23:59:59.9999999"
+                            except:
+                                day_start = event_start
+                                day_end = event_end
+                            
+                            org_params = {
+                                "startDateTime": day_start,
+                                "endDateTime": day_end,
+                                "$select": "id,subject,start,end,location,sensitivity",
+                                "$top": 100
+                            }
+                            org_headers = headers.copy()
+                            org_headers["Prefer"] = 'outlook.timezone="Europe/Amsterdam"'
+                            org_response = requests.get(org_calendar_url, headers=org_headers, params=org_params, timeout=5)
+                            
+                            if org_response.status_code == 200:
+                                org_events = org_response.json().get("value", [])
                                 
-                                # Parse the datetime to get the full day window (helps find events even if times don't match exactly)
-                                try:
-                                    # Parse format like "2025-11-19T22:30:00.0000000"
-                                    event_dt_str = event_start.split('T')[0] if 'T' in event_start else event_start[:10]
-                                    day_start = f"{event_dt_str}T00:00:00.0000000"
-                                    day_end = f"{event_dt_str}T23:59:59.9999999"
-                                except:
-                                    day_start = event_start
-                                    day_end = event_end
-                                
-                                org_params = {
-                                    "startDateTime": day_start,
-                                    "endDateTime": day_end,
-                                    "$select": "id,subject,start,end,location,sensitivity",
-                                    "$top": 100
-                                }
-                                # Use same timezone preference as room calendar query
-                                org_headers = headers.copy()
-                                org_headers["Prefer"] = 'outlook.timezone="Europe/Amsterdam"'
-                                org_response = requests.get(org_calendar_url, headers=org_headers, params=org_params, timeout=5)
-                                
-                                if org_response.status_code == 200:
-                                    org_events = org_response.json().get("value", [])
+                                for org_event in org_events:
+                                    org_start = org_event.get("start", {}).get("dateTime")
+                                    org_end = org_event.get("end", {}).get("dateTime")
+                                    org_location = org_event.get("location", {})
+                                    org_location_name = org_location.get("displayName", "") if isinstance(org_location, dict) else str(org_location)
                                     
-                                    # Find matching event by time OR by room name in location
-                                    for org_event in org_events:
-                                        org_start = org_event.get("start", {}).get("dateTime")
-                                        org_end = org_event.get("end", {}).get("dateTime")
-                                        org_location = org_event.get("location", {})
-                                        org_location_name = org_location.get("displayName", "") if isinstance(org_location, dict) else str(org_location)
+                                    time_match = (org_start == event_start and org_end == event_end)
+                                    room_display = room.get("displayName", "")
+                                    location_match = room_display and room_display.lower() in org_location_name.lower()
+                                    
+                                    if time_match or location_match:
+                                        org_subject = org_event.get("subject", "")
+                                        org_sensitivity = org_event.get("sensitivity", "normal")
                                         
-                                        # Try to match by exact time first
-                                        time_match = (org_start == event_start and org_end == event_end)
-                                        # Or match by room name in location
-                                        room_display = room.get("displayName", "")
-                                        location_match = room_display and room_display.lower() in org_location_name.lower()
-                                        
-                                        if time_match or location_match:
-                                            # Found the matching event in organizer's calendar
-                                            org_subject = org_event.get("subject", "")
-                                            org_sensitivity = org_event.get("sensitivity", "normal")
-                                            
-                                            if org_subject and org_subject.strip():
-                                                # Check if event is marked as private
-                                                if org_sensitivity == "private":
-                                                    subject = f"Bezet ({organizer_name})" if organizer_name else "Bezet"
-                                                else:
-                                                    # Format as "subject (organizer)" - but not if organizer is the room itself
-                                                    subject = f"{org_subject} ({organizer_name})" if (organizer_name and organizer_email != room_email) else org_subject
-                                                break
-                            except Exception as e:
-                                print(f"Could not retrieve subject from organizer {organizer_email}: {str(e)}", flush=True)
-                        
-                        # Final fallback if still no subject or only organizer name
-                        if not subject or subject.strip() == "" or subject.strip() == organizer_name.strip():
-                            subject = f"Bezet ({organizer_name})" if organizer_name else "Privé (onderwerp verborgen)"
-                        
-                        all_meetings.append({
-                            "id": event_id,
-                            "room": room.get("displayName"),
-                            "roomEmail": room_email,
-                            "subject": subject,
-                            "start": event.get("start", {}).get("dateTime"),
-                            "end": event.get("end", {}).get("dateTime"),
-                            "status": event.get("showAs", "busy"),
-                            "organizerEmail": organizer_email,
-                            "organizerName": organizer.get("name", ""),
-                            "body": body_content,
-                            "isOrganizer": is_organizer
-                        })
+                                        if org_subject and org_subject.strip():
+                                            if org_sensitivity == "private":
+                                                subject = f"Bezet ({organizer_name})" if organizer_name else "Bezet"
+                                            else:
+                                                subject = f"{org_subject} ({organizer_name})" if (organizer_name and organizer_email != room_email) else org_subject
+                                            break
+                        except Exception as e:
+                            print(f"Could not retrieve subject from organizer {organizer_email}: {str(e)}", flush=True)
+                    
+                    # Final fallback
+                    if not subject or subject.strip() == "" or subject.strip() == organizer_name.strip():
+                        subject = f"Bezet ({organizer_name})" if organizer_name else "Privé (onderwerp verborgen)"
+                    
+                    room_meetings.append({
+                        "id": event_id,
+                        "room": room.get("displayName"),
+                        "roomEmail": room_email,
+                        "subject": subject,
+                        "start": event.get("start", {}).get("dateTime"),
+                        "end": event.get("end", {}).get("dateTime"),
+                        "status": event.get("showAs", "busy"),
+                        "organizerEmail": organizer_email,
+                        "organizerName": organizer.get("name", ""),
+                        "body": body_content,
+                        "isOrganizer": is_organizer
+                    })
+                
+                return room_meetings
             except Exception as e:
-                print(f"Error processing room {room_email}: {str(e)}")
-                continue
+                print(f"Error processing room {room_email}: {str(e)}", flush=True)
+                return []
+        
+        # Fetch all room calendars in PARALLEL
+        all_meetings = []
+        
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            # Submit all tasks
+            future_to_room = {
+                executor.submit(fetch_room_calendar, room_id, room): (room_id, room)
+                for room_id, room in all_rooms.items()
+            }
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_room):
+                room_id, room = future_to_room[future]
+                try:
+                    meetings = future.result()
+                    all_meetings.extend(meetings)
+                except Exception as e:
+                    print(f"Error fetching calendar for room {room.get('emailAddress')}: {str(e)}", flush=True)
         
         return jsonify({"meetings": all_meetings, "count": len(all_meetings)})
     except Exception as e:
-        print(f"Error in get_meetings: {str(e)}")
+        print(f"Error in get_meetings: {str(e)}", flush=True)
+        return jsonify({"error": str(e), "meetings": []}), 500
+
+
+# ---- API endpoint: get all meetings PARALLEL VERSION (TEST) ----
+@app.get("/arcrooms/api/meetings-parallel")
+def get_meetings_parallel():
+    """
+    TEST VERSION: Parallel loading of meeting data using ThreadPoolExecutor
+    This should be significantly faster than the sequential version
+    """
+    try:
+        start_time = time.time()
+        token = get_token()
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        # Get all rooms
+        rooms_url = f"{GRAPH_ENDPOINT}/places/microsoft.graph.room"
+        rooms_r = requests.get(rooms_url, headers=headers, timeout=10)
+        rooms_r.raise_for_status()
+        
+        all_rooms = {}
+        for room in rooms_r.json().get("value", []):
+            all_rooms[room["id"]] = room
+        
+        rooms_fetch_time = time.time()
+        print(f"[PARALLEL] Rooms fetched in {rooms_fetch_time - start_time:.2f}s", flush=True)
+        
+        # Get schedules for next 10 days
+        start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=10)
+        
+        def fetch_room_calendar(room_id, room):
+            """Fetch calendar for a single room"""
+            room_email = room.get("emailAddress")
+            if not room_email:
+                return []
+            
+            try:
+                calendar_url = f"{GRAPH_ENDPOINT}/users/{room_email}/calendar/calendarView"
+                params = {
+                    "startDateTime": start.isoformat(),
+                    "endDateTime": end.isoformat(),
+                    "$select": "id,subject,start,end,showAs,body,organizer,location,isOrganizer,isCancelled,responseStatus,webLink",
+                    "$top": 100
+                }
+                
+                calendar_headers = headers.copy()
+                calendar_headers["Prefer"] = 'outlook.timezone="Europe/Amsterdam"'
+                
+                calendar_r = requests.get(calendar_url, headers=calendar_headers, params=params, timeout=10)
+                
+                if calendar_r.status_code != 200:
+                    return []
+                
+                events = calendar_r.json().get("value", [])
+                room_meetings = []
+                
+                for event in events:
+                    subject = event.get("subject", "")
+                    organizer = event.get("organizer", {}).get("emailAddress", {})
+                    organizer_name = organizer.get("name", "")
+                    organizer_email = organizer.get("address", "")
+                    body_content = event.get("body", {}).get("content", "")
+                    event_id = event.get("id")
+                    is_organizer = event.get("isOrganizer", False)
+                    
+                    # Check if subject is hidden
+                    subject_is_hidden = (not subject or subject.strip() == "" or subject.strip() == organizer_name.strip())
+                    if subject_is_hidden and not is_organizer and organizer_email:
+                        try:
+                            # Try to get real subject from organizer's calendar
+                            org_calendar_url = f"{GRAPH_ENDPOINT}/users/{organizer_email}/calendar/calendarView"
+                            event_start = event.get("start", {}).get("dateTime")
+                            event_end = event.get("end", {}).get("dateTime")
+                            
+                            try:
+                                event_dt_str = event_start.split('T')[0] if 'T' in event_start else event_start[:10]
+                                day_start = f"{event_dt_str}T00:00:00.0000000"
+                                day_end = f"{event_dt_str}T23:59:59.9999999"
+                            except:
+                                day_start = event_start
+                                day_end = event_end
+                            
+                            org_params = {
+                                "startDateTime": day_start,
+                                "endDateTime": day_end,
+                                "$select": "id,subject,start,end,location,sensitivity",
+                                "$top": 100
+                            }
+                            org_headers = headers.copy()
+                            org_headers["Prefer"] = 'outlook.timezone="Europe/Amsterdam"'
+                            org_response = requests.get(org_calendar_url, headers=org_headers, params=org_params, timeout=5)
+                            
+                            if org_response.status_code == 200:
+                                org_events = org_response.json().get("value", [])
+                                
+                                for org_event in org_events:
+                                    org_start = org_event.get("start", {}).get("dateTime")
+                                    org_end = org_event.get("end", {}).get("dateTime")
+                                    org_location = org_event.get("location", {})
+                                    org_location_name = org_location.get("displayName", "") if isinstance(org_location, dict) else str(org_location)
+                                    
+                                    time_match = (org_start == event_start and org_end == event_end)
+                                    room_display = room.get("displayName", "")
+                                    location_match = room_display and room_display.lower() in org_location_name.lower()
+                                    
+                                    if time_match or location_match:
+                                        org_subject = org_event.get("subject", "")
+                                        org_sensitivity = org_event.get("sensitivity", "normal")
+                                        
+                                        if org_subject and org_subject.strip():
+                                            if org_sensitivity == "private":
+                                                subject = f"Bezet ({organizer_name})" if organizer_name else "Bezet"
+                                            else:
+                                                subject = f"{org_subject} ({organizer_name})" if (organizer_name and organizer_email != room_email) else org_subject
+                                            break
+                        except Exception as e:
+                            print(f"Could not retrieve subject from organizer {organizer_email}: {str(e)}", flush=True)
+                    
+                    # Final fallback
+                    if not subject or subject.strip() == "" or subject.strip() == organizer_name.strip():
+                        subject = f"Bezet ({organizer_name})" if organizer_name else "Privé (onderwerp verborgen)"
+                    
+                    room_meetings.append({
+                        "id": event_id,
+                        "room": room.get("displayName"),
+                        "roomEmail": room_email,
+                        "subject": subject,
+                        "start": event.get("start", {}).get("dateTime"),
+                        "end": event.get("end", {}).get("dateTime"),
+                        "status": event.get("showAs", "busy"),
+                        "organizerEmail": organizer_email,
+                        "organizerName": organizer.get("name", ""),
+                        "body": body_content,
+                        "isOrganizer": is_organizer
+                    })
+                
+                return room_meetings
+            except Exception as e:
+                print(f"Error processing room {room_email}: {str(e)}", flush=True)
+                return []
+        
+        # Fetch all room calendars in parallel
+        all_meetings = []
+        parallel_start = time.time()
+        
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            # Submit all tasks
+            future_to_room = {
+                executor.submit(fetch_room_calendar, room_id, room): (room_id, room)
+                for room_id, room in all_rooms.items()
+            }
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_room):
+                room_id, room = future_to_room[future]
+                try:
+                    meetings = future.result()
+                    all_meetings.extend(meetings)
+                except Exception as e:
+                    print(f"Error fetching calendar for room {room.get('emailAddress')}: {str(e)}", flush=True)
+        
+        parallel_end = time.time()
+        total_time = parallel_end - start_time
+        fetch_time = parallel_end - parallel_start
+        
+        print(f"[PARALLEL] Calendars fetched in {fetch_time:.2f}s (parallel)", flush=True)
+        print(f"[PARALLEL] Total time: {total_time:.2f}s", flush=True)
+        print(f"[PARALLEL] Found {len(all_meetings)} meetings", flush=True)
+        
+        return jsonify({
+            "meetings": all_meetings, 
+            "count": len(all_meetings),
+            "performance": {
+                "total_time": round(total_time, 2),
+                "rooms_fetch_time": round(rooms_fetch_time - start_time, 2),
+                "calendars_fetch_time": round(fetch_time, 2),
+                "rooms_count": len(all_rooms)
+            }
+        })
+    except Exception as e:
+        print(f"Error in get_meetings_parallel: {str(e)}", flush=True)
         return jsonify({"error": str(e), "meetings": []}), 500
 
 
