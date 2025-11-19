@@ -43,27 +43,38 @@ async function loadRooms() {
         
         // Load working hours for each room
         updateLoadingStatus('Beschikbaarheid ophalen per ruimte...');
-        for (let i = 0; i < roomsData.length; i++) {
-            const room = roomsData[i];
+        
+        // Load working hours for all rooms in PARALLEL
+        const workingHoursPromises = roomsData.map((room, i) => {
             updateLoadingStatus(
                 `Beschikbaarheid laden: ${room.displayName}`,
                 `Ruimte ${i + 1}/${roomsData.length}`
             );
-            
-            const whResponse = await fetch(`/arcrooms/api/admin/working-hours/${encodeURIComponent(room.emailAddress)}`);
-            room.workingHours = await whResponse.json();
-            room.canEdit = room.workingHours.canEdit !== false; // Default to true if not specified
-            
-            // Initialize time blocks structure
-            room.timeBlocks = {};
-            daysOfWeek.forEach(day => {
-                const slots = room.workingHours?.timeSlots?.filter(ts => ts.daysOfWeek?.includes(day.value)) || [];
-                room.timeBlocks[day.value] = slots.map(slot => ({
-                    start: timeToMinutes(slot.startTime),
-                    end: timeToMinutes(slot.endTime)
-                }));
-            });
-        }
+            return fetch(`/arcrooms/api/admin/working-hours/${encodeURIComponent(room.emailAddress)}`)
+                .then(whResponse => whResponse.json())
+                .then(workingHours => {
+                    room.workingHours = workingHours;
+                    room.canEdit = workingHours.canEdit !== false;
+                    
+                    // Initialize time blocks structure
+                    room.timeBlocks = {};
+                    daysOfWeek.forEach(day => {
+                        const slots = workingHours?.timeSlots?.filter(ts => ts.daysOfWeek?.includes(day.value)) || [];
+                        room.timeBlocks[day.value] = slots.map(slot => ({
+                            start: timeToMinutes(slot.startTime),
+                            end: timeToMinutes(slot.endTime)
+                        }));
+                    });
+                    
+                    updateLoadingStatus(
+                        `Beschikbaarheid geladen: ${room.displayName}`,
+                        `Ruimte ${i + 1}/${roomsData.length}`
+                    );
+                });
+        });
+        
+        // Wait for all working hours to load
+        await Promise.all(workingHoursPromises);
         
         updateLoadingStatus('Interface opbouwen...', `✓ Stap 2/2`);
         await new Promise(resolve => setTimeout(resolve, 200));
