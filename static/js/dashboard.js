@@ -141,8 +141,8 @@ function populateTimeSlots(existingMeetings) {
         for (let meeting of existingMeetings) {
             const meetingStart = new Date(meeting.start);
             const meetingEnd = new Date(meeting.end);
-            const meetingStartTime = new Date(`2000-01-01T${meetingStart.getUTCHours().toString().padStart(2, '0')}:${meetingStart.getUTCMinutes().toString().padStart(2, '0')}:00`);
-            const meetingEndTime = new Date(`2000-01-01T${meetingEnd.getUTCHours().toString().padStart(2, '0')}:${meetingEnd.getUTCMinutes().toString().padStart(2, '0')}:00`);
+            const meetingStartTime = new Date(`2000-01-01T${meetingStart.getHours().toString().padStart(2, '0')}:${meetingStart.getMinutes().toString().padStart(2, '0')}:00`);
+            const meetingEndTime = new Date(`2000-01-01T${meetingEnd.getHours().toString().padStart(2, '0')}:${meetingEnd.getMinutes().toString().padStart(2, '0')}:00`);
             
             if (slotTime >= meetingStartTime && slotTime < meetingEndTime) {
                 return false; // Slot is occupied
@@ -207,8 +207,8 @@ function populateTimeSlots(existingMeetings) {
             for (let meeting of existingMeetings) {
                 const meetingStart = new Date(meeting.start);
                 const meetingEnd = new Date(meeting.end);
-                const meetingStartTime = new Date(`2000-01-01T${meetingStart.getUTCHours().toString().padStart(2, '0')}:${meetingStart.getUTCMinutes().toString().padStart(2, '0')}:00`);
-                const meetingEndTime = new Date(`2000-01-01T${meetingEnd.getUTCHours().toString().padStart(2, '0')}:${meetingEnd.getUTCMinutes().toString().padStart(2, '0')}:00`);
+                const meetingStartTime = new Date(`2000-01-01T${meetingStart.getHours().toString().padStart(2, '0')}:${meetingStart.getMinutes().toString().padStart(2, '0')}:00`);
+                const meetingEndTime = new Date(`2000-01-01T${meetingEnd.getHours().toString().padStart(2, '0')}:${meetingEnd.getMinutes().toString().padStart(2, '0')}:00`);
                 
                 // Check if the range overlaps with existing meeting
                 if (!(endTime <= meetingStartTime || startTimeDate >= meetingEndTime)) {
