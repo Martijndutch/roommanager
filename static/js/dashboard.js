@@ -17,9 +17,11 @@ let workingHoursData = {};
 
 function openBookingModal(room, date) {
     if (!isLoggedIn) {
-// Redirect to login if not logged in
-window.location.href = '/arcrooms/login?redirect=booking';
-return;
+        // Store the intended action before redirecting
+        sessionStorage.setItem('pendingBooking', JSON.stringify({ room, date: date.toISOString() }));
+        // Redirect to login if not logged in
+        window.location.href = '/arcrooms/login?redirect=booking';
+        return;
     }
     
     currentBookingData = { room, date };
@@ -46,8 +48,21 @@ return;
     document.getElementById('errorMessage').style.display = 'none';
 }
 
-// Auto-open modal if user just logged in with booking redirect
-if (loginRedirect) {
+// Auto-open modal if user just logged in with booking redirect or has pending booking
+if (isLoggedIn && (loginRedirect || sessionStorage.getItem('pendingBooking'))) {
+    const pending = sessionStorage.getItem('pendingBooking');
+    if (pending) {
+        try {
+            const { room, date } = JSON.parse(pending);
+            sessionStorage.removeItem('pendingBooking');
+            // Wait for data to load first
+            setTimeout(() => {
+                openBookingModal(room, new Date(date));
+            }, 1000);
+        } catch (e) {
+            console.error('Failed to restore pending booking:', e);
+        }
+    }
     // Clear the redirect flag
     fetch('/arcrooms/api/clear-redirect', { method: 'POST' });
 }
