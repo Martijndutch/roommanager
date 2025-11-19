@@ -1,0 +1,348 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #1a1a1a;
+    color: #fff;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 30px;
+    border-radius: 10px;
+}
+
+h1 {
+    color: #e30613;
+    margin-bottom: 30px;
+}
+
+.admin-controls {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid rgba(227, 6, 19, 0.3);
+}
+
+.admin-controls .btn {
+    margin: 0;
+}
+
+.room-card {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 20px;
+    margin-bottom: 30px;
+    border-radius: 8px;
+    border-left: 4px solid #e30613;
+}
+
+.room-card.read-only {
+    background: rgba(128, 128, 128, 0.1);
+    border-left: 4px solid #888;
+    opacity: 0.7;
+}
+
+.room-card h2 {
+    color: #e30613;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.room-card.read-only h2 {
+    color: #888;
+}
+
+.read-only-badge {
+    background: #888;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: normal;
+}
+
+.room-delegates {
+    color: #aaa;
+    font-size: 13px;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 5px;
+}
+
+.room-delegates strong {
+    color: #fff;
+}
+
+.delegate-list {
+    margin-top: 5px;
+    color: #ccc;
+}
+
+.no-permission {
+    color: #ff9800;
+    font-style: italic;
+}
+
+.info-button {
+    background: #2196F3;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    margin-left: 10px;
+}
+
+.info-button:hover {
+    background: #1976D2;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.show {
+    display: flex;
+}
+
+.modal-content {
+    background: #2a2a2a;
+    padding: 30px;
+    border-radius: 10px;
+    max-width: 500px;
+    width: 90%;
+    border: 2px solid #e30613;
+}
+
+.modal-content h3 {
+    color: #e30613;
+    margin-bottom: 20px;
+}
+
+.modal-content p {
+    color: #ccc;
+    line-height: 1.6;
+    margin-bottom: 15px;
+}
+
+.modal-close {
+    background: #555;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    float: right;
+}
+
+.modal-close:hover {
+    background: #666;
+}
+
+.schedule-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.schedule-table th {
+    padding: 8px;
+    text-align: center;
+    font-size: 12px;
+    color: #ccc;
+    border-bottom: 1px solid #555;
+}
+
+.schedule-table td {
+    padding: 0;
+    height: 40px;
+    border-bottom: 1px solid #333;
+}
+
+.day-label {
+    padding: 8px 12px;
+    font-weight: normal;
+    color: #fff;
+    width: 80px;
+}
+
+.timeline-container {
+    position: relative;
+    height: 40px;
+    background: linear-gradient(to right, 
+#1a1a1a 0%, #1a1a1a 4.166%,
+transparent 4.166%, transparent 8.333%,
+#1a1a1a 8.333%, #1a1a1a 12.5%,
+transparent 12.5%, transparent 16.666%,
+#1a1a1a 16.666%, #1a1a1a 20.833%,
+transparent 20.833%, transparent 25%,
+#1a1a1a 25%, #1a1a1a 29.166%,
+transparent 29.166%, transparent 33.333%,
+#1a1a1a 33.333%, #1a1a1a 37.5%,
+transparent 37.5%, transparent 41.666%,
+#1a1a1a 41.666%, #1a1a1a 45.833%,
+transparent 45.833%, transparent 50%,
+#1a1a1a 50%, #1a1a1a 54.166%,
+transparent 54.166%, transparent 58.333%,
+#1a1a1a 58.333%, #1a1a1a 62.5%,
+transparent 62.5%, transparent 66.666%,
+#1a1a1a 66.666%, #1a1a1a 70.833%,
+transparent 70.833%, transparent 75%,
+#1a1a1a 75%, #1a1a1a 79.166%,
+transparent 79.166%, transparent 83.333%,
+#1a1a1a 83.333%, #1a1a1a 87.5%,
+transparent 87.5%, transparent 91.666%,
+#1a1a1a 91.666%, #1a1a1a 95.833%,
+transparent 95.833%, transparent 100%
+    );
+}
+
+.time-block-visual {
+    position: absolute;
+    top: 5px;
+    height: 30px;
+    background: #0078d4;
+    border: 1px solid #005a9e;
+    border-radius: 4px;
+    cursor: move;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: white;
+    user-select: none;
+    min-width: 30px;
+}
+
+.time-block-visual.disabled {
+    background: #666;
+    border: 1px solid #555;
+    cursor: default;
+}
+
+.time-block-visual:hover {
+    background: #106ebe;
+}
+
+.time-block-visual.disabled:hover {
+    background: #666;
+}
+
+.resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    cursor: ew-resize;
+}
+
+.resize-handle.left {
+    left: 0;
+}
+
+.resize-handle.right {
+    right: 0;
+}
+
+.btn {
+    background: #e30613;
+    color: white;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.btn:hover {
+    background: #c00510;
+}
+
+.btn-secondary {
+    background: #555;
+}
+
+.btn-secondary:hover {
+    background: #666;
+}
+
+.btn-add-slot {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    margin-left: 10px;
+}
+
+.btn-add-slot:hover {
+    background: #218838;
+}
+
+.btn-delete-block {
+    position: absolute;
+    right: 2px;
+    top: 2px;
+    background: #dc3545;
+    color: white;
+    border: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+.btn-delete-block:hover {
+    background: #c82333;
+}
+
+.status-message {
+    padding: 15px;
+    margin: 20px 0;
+    border-radius: 5px;
+    display: none;
+}
+
+.status-message.success {
+    background: #28a745;
+    display: block;
+}
+
+.status-message.error {
+    background: #dc3545;
+    display: block;
+}
+
+.time-header {
+    font-size: 10px;
+    color: #999;
+}

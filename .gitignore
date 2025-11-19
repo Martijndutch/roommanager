@@ -1,0 +1,36 @@
+# Sensitive configuration files
+config.json
+*.env
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Logs
+*.log
+flask.log
+meeting_requests.log
+
+# Backups
+*.backup
+*.bak
+
+# Local data
+room_working_hours.json
+
+# System files
+.DS_Store
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/

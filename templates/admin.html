@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>sv ARC - Admin Paneel</title>
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}?v=4">
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 sv ARC Admin - Beschikbaarheid van Locaties</h1>
+        
+        <div class="admin-controls">
+            <button class="btn" onclick="saveAllWorkingHours()">💾 Alle Wijzigingen Opslaan</button>
+            <button class="btn btn-secondary" onclick="window.location.href='/arcrooms/'">← Terug naar Dashboard</button>
+        </div>
+        
+        <div class="status-message" id="statusMessage"></div>
+        
+        <div id="roomsContainer"></div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/admin.js') }}?v=5"></script>
+</body>
+</html>

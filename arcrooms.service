@@ -1,0 +1,15 @@
+[Unit]
+Description=sv ARC Room Booking Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=martijn
+WorkingDirectory=/home/martijn/arcRooms
+Environment="PATH=/home/martijn/arcRooms/venv/bin"
+ExecStart=/home/martijn/arcRooms/venv/bin/python /home/martijn/arcRooms/app.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
