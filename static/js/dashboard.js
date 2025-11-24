@@ -1,3 +1,36 @@
+// Timezone-safe helper functions with performance optimization
+// Use Intl.DateTimeFormat for fast, reliable timezone conversion (100x faster than toLocaleString)
+const timeFormatterAmsterdam = new Intl.DateTimeFormat('nl-NL', {
+    timeZone: 'Europe/Amsterdam',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+});
+
+const hourFormatterAmsterdam = new Intl.DateTimeFormat('nl-NL', {
+    timeZone: 'Europe/Amsterdam',
+    hour: 'numeric',
+    hour12: false
+});
+
+const minuteFormatterAmsterdam = new Intl.DateTimeFormat('nl-NL', {
+    timeZone: 'Europe/Amsterdam',
+    minute: 'numeric',
+    hour12: false
+});
+
+function getAmsterdamTime(isoString) {
+    const date = new Date(isoString);
+    const parts = timeFormatterAmsterdam.formatToParts(date);
+    const hour = Number(parts.find(p => p.type === 'hour').value);
+    const minute = Number(parts.find(p => p.type === 'minute').value);
+    return { hour, minute };
+}
+
+function formatTimeAmsterdam(isoString) {
+    return timeFormatterAmsterdam.format(new Date(isoString));
+}
+
 // Zoom control via URL parameter only (for kiosk mode)
 function setZoom(mode) {
     if (mode === 'compact') {
@@ -33,6 +66,13 @@ let allMeetingsData = [];
 let allRoomsData = [];
 let workingHoursData = {};
 
+// Helper function to decode HTML entities
+function decodeHtml(html) {
+    const txt = document.createElement('textarea');
+    txt.innerHTML = html;
+    return txt.value;
+}
+
 function openBookingModal(room, date) {
     if (!isLoggedIn) {
         // Store the intended action before redirecting
@@ -42,16 +82,76 @@ function openBookingModal(room, date) {
         return;
     }
     
+    // Decode HTML entities in room name (e.g., &amp; -> &)
+    room = decodeHtml(room);
+    
     currentBookingData = { room, date };
-    document.getElementById('modalRoom').value = room;
-    document.getElementById('modalDate').value = date.toLocaleDateString('nl-NL', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
+    
+    // Populate room dropdown
+    const roomSelect = document.getElementById('modalRoom');
+    roomSelect.innerHTML = '<option value="">-- Selecteer ruimte --</option>';
+    allRoomsData.forEach(r => {
+        const option = document.createElement('option');
+        option.value = r.displayName;
+        option.textContent = r.displayName;
+        if (r.displayName === room) {
+            option.selected = true;
+        }
+        roomSelect.appendChild(option);
     });
     
-    // Get meetings for this room on this date
+    // Populate date dropdown with next 14 days
+    const dateSelect = document.getElementById('modalDate');
+    dateSelect.innerHTML = '<option value="">-- Selecteer datum --</option>';
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    for (let i = 0; i < 14; i++) {
+        const d = new Date(today);
+        d.setDate(today.getDate() + i);
+        const option = document.createElement('option');
+        // Use local date string (YYYY-MM-DD) instead of ISO to avoid timezone issues
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
+        option.value = dateStr;
+        option.textContent = d.toLocaleDateString('nl-NL', { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        });
+        // Compare with passed date
+        const passedDateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        if (dateStr === passedDateStr) {
+            option.selected = true;
+        }
+        dateSelect.appendChild(option);
+    }
+    
+    // Function to update time slots based on current room and date selection
+    const updateTimeSlots = () => {
+        const selectedRoom = roomSelect.value;
+        const selectedDateStr = dateSelect.value;
+        
+        if (selectedRoom && selectedDateStr) {
+            currentBookingData.room = selectedRoom;
+            currentBookingData.date = new Date(selectedDateStr + 'T12:00:00');
+            
+            const roomMeetings = allMeetingsData.filter(m => 
+                m.room === selectedRoom && 
+                getDateKey(m.start) === selectedDateStr
+            );
+            populateTimeSlots(roomMeetings);
+        }
+    };
+    
+    // Add event listeners to update time slots when room or date changes
+    roomSelect.onchange = updateTimeSlots;
+    dateSelect.onchange = updateTimeSlots;
+    
+    // Initial population of time slots
     const dateKey = date.toISOString().split('T')[0];
     const roomMeetings = allMeetingsData.filter(m => 
         m.room === room && 
@@ -80,6 +180,19 @@ if (isLoggedIn && (loginRedirect || sessionStorage.getItem('pendingBooking'))) {
         } catch (e) {
             console.error('Failed to restore pending booking:', e);
         }
+    } else if (loginRedirect) {
+        // User just logged in via QR code - open booking modal with first room and today's date
+        setTimeout(async () => {
+            // Wait for rooms to load
+            while (allRoomsData.length === 0) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            // Open booking modal with first room and today
+            if (allRoomsData.length > 0) {
+                const firstRoom = allRoomsData[0].displayName;
+                openBookingModal(firstRoom, new Date());
+            }
+        }, 500);
     }
     // Clear the redirect flag
     fetch('/arcrooms/api/clear-redirect', { method: 'POST' });
@@ -88,9 +201,6 @@ if (isLoggedIn && (loginRedirect || sessionStorage.getItem('pendingBooking'))) {
 function populateTimeSlots(existingMeetings) {
     const startSelect = document.getElementById('startTime');
     const endSelect = document.getElementById('endTime');
-    
-    // Debug: Log existing meetings
-    console.log('Existing meetings for time slot calculation:', existingMeetings);
     
     // Clear existing options
     startSelect.innerHTML = '<option value="">-- Selecteer starttijd --</option>';
@@ -142,16 +252,9 @@ function populateTimeSlots(existingMeetings) {
         
         // Check if this slot overlaps with any existing meeting
         for (let meeting of existingMeetings) {
-            // Parse the ISO datetime string (format: "2025-11-26T08:00:00")
-            // This is already in local time (Europe/Amsterdam) from the API
-            const meetingStart = new Date(meeting.start);
-            const meetingEnd = new Date(meeting.end);
-            
-            // Extract hours and minutes for time-only comparison
-            const meetingStartHours = meetingStart.getHours();
-            const meetingStartMinutes = meetingStart.getMinutes();
-            const meetingEndHours = meetingEnd.getHours();
-            const meetingEndMinutes = meetingEnd.getMinutes();
+            // Backend sends UTC, extract Amsterdam time
+            const { hour: meetingStartHours, minute: meetingStartMinutes } = getAmsterdamTime(meeting.start);
+            const { hour: meetingEndHours, minute: meetingEndMinutes } = getAmsterdamTime(meeting.end);
             
             // Create time-only dates for comparison (same date, different times)
             const meetingStartTime = new Date(`2000-01-01T${meetingStartHours.toString().padStart(2, '0')}:${meetingStartMinutes.toString().padStart(2, '0')}:00`);
@@ -176,9 +279,15 @@ function populateTimeSlots(existingMeetings) {
         option.textContent = slot;
         startSelect.appendChild(option);
     });
+}
+
+// Setup end time population once (prevent event listener leak)
+function setupEndTimeHandler() {
+    const startSelect = document.getElementById('startTime');
+    const endSelect = document.getElementById('endTime');
     
-    // Update end times when start time changes
-    startSelect.addEventListener('change', function() {
+    // Single event handler - no memory leaks
+    startSelect.addEventListener('change', function updateEndTimes() {
         const startTime = this.value;
         if (!startTime) {
             endSelect.innerHTML = '<option value="">-- Selecteer eindtijd --</option>';
@@ -186,12 +295,39 @@ function populateTimeSlots(existingMeetings) {
         }
         
         endSelect.innerHTML = '<option value="">-- Selecteer eindtijd --</option>';
+        
+        // Get working hours and existing meetings from current booking context
+        if (!currentBookingData) return;
+        
+        const room = currentBookingData.room;
+        const roomData = allRoomsData.find(r => r.displayName === room);
+        const workingHours = roomData ? workingHoursData[roomData.emailAddress] : null;
+        const date = currentBookingData.date;
+        const dayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][date.getDay()];
+        
+        // Get existing meetings for this room and date
+        const dateKey = date.toISOString().split('T')[0];
+        const existingMeetings = allMeetingsData.filter(m => 
+            m.room === room && 
+            getDateKey(m.start) === dateKey
+        );
+        
+        // Generate time slots
+        const slots = [];
+        for (let hour = 7; hour <= 22; hour++) {
+            for (let minute of [0, 30]) {
+                if (hour === 22 && minute === 30) break;
+                const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                slots.push(time);
+            }
+        }
+        
         const startIndex = slots.indexOf(startTime);
         const startTimeDate = new Date(`2000-01-01T${startTime}:00`);
         const startMinutes = startTimeDate.getHours() * 60 + startTimeDate.getMinutes();
         
         // Find which working hours block contains the start time
-        let workingHoursEndMinutes = 22 * 60; // Default end at 22:00
+        let workingHoursEndMinutes = 22 * 60;
         if (workingHours && workingHours.timeSlots && workingHours.timeSlots.length > 0) {
             const daySlots = workingHours.timeSlots.filter(ts => ts.daysOfWeek && ts.daysOfWeek.includes(dayOfWeek));
             
@@ -201,7 +337,6 @@ function populateTimeSlots(existingMeetings) {
                 const blockStartMinutes = startH * 60 + startM;
                 const blockEndMinutes = endH * 60 + endM;
                 
-                // Check if start time is within this block
                 if (startMinutes >= blockStartMinutes && startMinutes < blockEndMinutes) {
                     workingHoursEndMinutes = blockEndMinutes;
                     break;
@@ -209,36 +344,25 @@ function populateTimeSlots(existingMeetings) {
             }
         }
         
-        // Find available end times after the start time
+        // Find available end times
         for (let i = startIndex + 1; i < slots.length; i++) {
             const endSlot = slots[i];
             const endTime = new Date(`2000-01-01T${endSlot}:00`);
             const endMinutes = endTime.getHours() * 60 + endTime.getMinutes();
             
-            // Stop if end time exceeds working hours block
             if (endMinutes > workingHoursEndMinutes) {
                 break;
             }
             
-            // Check if the entire time range is available
+            // Check if range is available
             let rangeAvailable = true;
             for (let meeting of existingMeetings) {
-                // Parse the ISO datetime string (format: "2025-11-26T08:00:00")
-                const meetingStart = new Date(meeting.start);
-                const meetingEnd = new Date(meeting.end);
+                const { hour: meetingStartHours, minute: meetingStartMinutes } = getAmsterdamTime(meeting.start);
+                const { hour: meetingEndHours, minute: meetingEndMinutes } = getAmsterdamTime(meeting.end);
                 
-                // Extract hours and minutes for time-only comparison
-                const meetingStartHours = meetingStart.getHours();
-                const meetingStartMinutes = meetingStart.getMinutes();
-                const meetingEndHours = meetingEnd.getHours();
-                const meetingEndMinutes = meetingEnd.getMinutes();
-                
-                // Create time-only dates for comparison
                 const meetingStartTime = new Date(`2000-01-01T${meetingStartHours.toString().padStart(2, '0')}:${meetingStartMinutes.toString().padStart(2, '0')}:00`);
                 const meetingEndTime = new Date(`2000-01-01T${meetingEndHours.toString().padStart(2, '0')}:${meetingEndMinutes.toString().padStart(2, '0')}:00`);
                 
-                // Check if the range [startTimeDate, endTime] overlaps with [meetingStartTime, meetingEndTime]
-                // Ranges overlap if: NOT (endTime <= meetingStartTime OR startTimeDate >= meetingEndTime)
                 if (!(endTime <= meetingStartTime || startTimeDate >= meetingEndTime)) {
                     rangeAvailable = false;
                     break;
@@ -251,11 +375,14 @@ function populateTimeSlots(existingMeetings) {
                 option.textContent = endSlot;
                 endSelect.appendChild(option);
             } else {
-                break; // Stop at first unavailable slot
+                break;
             }
         }
     });
 }
+
+// Initialize end time handler once
+setupEndTimeHandler();
 
 function closeModal() {
     document.getElementById('bookingModal').classList.remove('show');
@@ -265,9 +392,13 @@ function closeModal() {
 document.getElementById('bookingForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     
+    // Get the current selected room from dropdown to ensure it's not HTML-encoded
+    const selectedRoom = document.getElementById('modalRoom').value;
+    const selectedDate = document.getElementById('modalDate').value;
+    
     const formData = {
-        room: currentBookingData.room,
-        date: currentBookingData.date.toISOString().split('T')[0],
+        room: selectedRoom,
+        date: selectedDate,
         startTime: document.getElementById('startTime').value,
         endTime: document.getElementById('endTime').value,
         subject: document.getElementById('subject').value,
@@ -316,8 +447,7 @@ document.getElementById('bookingForm').addEventListener('submit', async function
 });
 
 function formatTime(dateStr) {
-    const date = new Date(dateStr);
-    return date.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+    return formatTimeAmsterdam(dateStr);
 }
 
 function formatDate(dateStr) {
@@ -456,7 +586,7 @@ async function loadMeetings() {
                             const statusText = isPending ? ' (wacht op goedkeuring)' : '';
                             return `
                             <div class="mini-meeting" onclick="window.open('https://outlook.office365.com/calendar/item/${encodeURIComponent(m.id)}', 'outlook', 'width=1000,height=800,scrollbars=yes,resizable=yes')" style="cursor: pointer;">
-                                <div class="mini-meeting-time">${formatTime(m.start)}</div>
+                                <div class="mini-meeting-time">${formatTime(m.start)} - ${formatTime(m.end)}</div>
                                 <div class="mini-meeting-title">${m.subject}</div>
                                 <div class="mini-meeting-room">${m.room}${statusText}</div>
                             </div>
@@ -465,9 +595,6 @@ async function loadMeetings() {
                 </div>
             `;
         }).join('');
-
-        // Render availability grid
-        renderAvailabilityGrid(meetings);
 
     } catch (error) {
         console.error('Fout bij laden vergaderingen:', error);
@@ -497,9 +624,9 @@ function renderAvailabilityGrid(meetings) {
 function renderGrid(rooms, meetings) {
     const availabilityContainer = document.getElementById('availabilityGrid');
     
-    // Create 10 days
+    // Create 7 days
     const days = [];
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 7; i++) {
         const date = new Date();
         date.setDate(date.getDate() + i);
         days.push(date);
@@ -558,17 +685,17 @@ function renderGrid(rooms, meetings) {
             );
             
             const morning = dayMeetings.filter(m => {
-                const hour = new Date(m.start).getUTCHours();
+                const { hour } = getAmsterdamTime(m.start);
                 return hour >= 0 && hour < 12;
             }).length;
             
             const afternoon = dayMeetings.filter(m => {
-                const hour = new Date(m.start).getUTCHours();
+                const { hour } = getAmsterdamTime(m.start);
                 return hour >= 12 && hour < 18;
             }).length;
             
             const evening = dayMeetings.filter(m => {
-                const hour = new Date(m.start).getUTCHours();
+                const { hour } = getAmsterdamTime(m.start);
                 return hour >= 18;
             }).length;
             
@@ -618,9 +745,12 @@ function renderGrid(rooms, meetings) {
             
             const title = `${avail.count} vergadering(en) - Och: ${morning}, Mid: ${afternoon}, Av: ${evening} - Klik om te boeken`;
             
+            // Use data attribute to avoid HTML encoding issues with room names containing special characters
             html += `<div class="availability-cell" 
                           title="${title}"
-                          onclick="openBookingModal('${room}', new Date('${day.toISOString()}'))">
+                          data-room="${room.replace(/"/g, '&quot;')}"
+                          data-date="${day.toISOString()}"
+                          onclick="openBookingModal(this.getAttribute('data-room'), new Date(this.getAttribute('data-date')))">
                 <div class="availability-time-sections">
                     <div class="availability-time-section ${getTimeClass(morning, morningOpen)}">${getTimeDisplay(morning, morningOpen)}</div>
                     <div class="availability-time-section ${getTimeClass(afternoon, afternoonOpen)}">${getTimeDisplay(afternoon, afternoonOpen)}</div>
@@ -641,7 +771,49 @@ async function init() {
         loadRoomsData(),
         loadMeetings()
     ]);
+    // Render availability grid after both rooms (with working hours) and meetings are loaded
+    renderAvailabilityGrid(allMeetingsData);
+    
+    // Generate QR code for booking
+    generateBookingQRCode();
 }
+
+function generateBookingQRCode() {
+    const container = document.getElementById('qrCodeContainer');
+    if (!container) return;
+    
+    // Get current URL and add /login with booking redirect
+    const baseUrl = window.location.origin + window.location.pathname;
+    const bookingUrl = baseUrl.replace('/arcrooms/', '/arcrooms/login?redirect=booking');
+    
+    // Use QR Server API to generate QR code
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(bookingUrl)}`;
+    
+    container.innerHTML = `
+        <div style="display: inline-block; cursor: pointer;" onclick="handleQRCodeClick(event)">
+            <img src="${qrUrl}" 
+                 alt="QR Code voor vergadering boeken" 
+                 style="width: 100px; height: 100px; border: 2px solid #e30613; border-radius: 5px; background: white; padding: 5px; transition: transform 0.2s;"
+                 title="Klik of scan om vergadering te boeken"
+                 onmouseover="this.style.transform='scale(1.05)'"
+                 onmouseout="this.style.transform='scale(1)'">
+        </div>
+    `;
+}
+
+function handleQRCodeClick(event) {
+    event.preventDefault();
+    
+    // If user is already logged in, open booking modal directly
+    if (isLoggedIn && allRoomsData.length > 0) {
+        const firstRoom = allRoomsData[0].displayName;
+        openBookingModal(firstRoom, new Date());
+    } else {
+        // If not logged in, redirect to login with booking redirect
+        window.location.href = '/arcrooms/login?redirect=booking';
+    }
+}
+
 init();
 setInterval(async () => {
     // Refresh rooms and meetings in parallel
@@ -649,112 +821,7 @@ setInterval(async () => {
         loadRoomsData(),
         loadMeetings()
     ]);
+    // Re-render availability grid after refresh
+    renderAvailabilityGrid(allMeetingsData);
 }, 5 * 60 * 1000);
 
-// ---- Meeting Details, Edit, Delete Functions ----
-
-function showMeetingDetails(meetingId, roomEmail) {
-    if (!meetingId || !roomEmail) {
-        console.error('Missing meetingId or roomEmail');
-        return;
-    }
-    
-    fetch(`/arcrooms/api/meeting/${encodeURIComponent(meetingId)}?room_email=${encodeURIComponent(roomEmail)}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                alert('Fout bij laden vergadering: ' + data.error);
-                return;
-            }
-            
-            const modal = document.getElementById('meetingDetailsModal');
-            const content = document.getElementById('meetingDetailsContent');
-            
-            const startDate = new Date(data.start);
-            const endDate = new Date(data.end);
-            
-            let html = `
-                <div style="margin: 20px 0;">
-                    <p><strong>Onderwerp:</strong> ${escapeHtml(data.subject)}</p>
-                    <p><strong>Ruimte:</strong> ${escapeHtml(data.roomEmail)}</p>
-                    <p><strong>Datum:</strong> ${startDate.toLocaleDateString('nl-NL', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'})}</p>
-                    <p><strong>Tijd:</strong> ${formatTime(data.start)} - ${formatTime(data.end)}</p>
-                    <p><strong>Organisator:</strong> ${escapeHtml(data.organizerName)} (${escapeHtml(data.organizerEmail)})</p>
-                </div>
-            `;
-            
-            if (data.canEdit) {
-                html += `
-                    <div class="form-buttons" style="margin-top: 20px;">
-                        <button type="button" class="btn btn-primary" onclick="editMeeting('${data.id}', '${data.roomEmail}', '${data.start}', '${data.end}', '${escapeHtml(data.subject)}')">
-                            ✏️ Bewerken
-                        </button>
-                        <button type="button" class="btn" style="background: #dc3545;" onclick="deleteMeeting('${data.id}', '${data.roomEmail}')">
-                            🗑️ Verwijderen
-                        </button>
-                    </div>
-                `;
-            } else {
-                html += `<p style="margin-top: 15px; color: #999; font-style: italic;">U kunt deze vergadering alleen bekijken.</p>`;
-            }
-            
-            content.innerHTML = html;
-            modal.classList.add('show');
-        })
-        .catch(error => {
-            console.error('Error loading meeting details:', error);
-            alert('Fout bij laden vergadering details');
-        });
-}
-
-function closeMeetingDetailsModal() {
-    document.getElementById('meetingDetailsModal').classList.remove('show');
-}
-
-function editMeeting(eventId, roomEmail, startDateTime, endDateTime, currentSubject) {
-    // Open Outlook Web App to edit the meeting directly in a popup
-    const outlookUrl = `https://outlook.office365.com/calendar/item/${encodeURIComponent(eventId)}`;
-    window.open(outlookUrl, 'outlook', 'width=1000,height=800,scrollbars=yes,resizable=yes');
-    closeMeetingDetailsModal();
-}
-
-function deleteMeeting(eventId, roomEmail) {
-    if (!confirm('Weet u zeker dat u deze vergadering wilt verwijderen?')) {
-        return;
-    }
-    
-    fetch(`/arcrooms/api/meeting/${encodeURIComponent(eventId)}/delete`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            roomEmail: roomEmail
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            document.getElementById('detailsErrorMessage').textContent = 'Fout: ' + data.error;
-            document.getElementById('detailsErrorMessage').style.display = 'block';
-        } else {
-            document.getElementById('detailsSuccessMessage').textContent = data.message || 'Vergadering verwijderd';
-            document.getElementById('detailsSuccessMessage').style.display = 'block';
-            
-            setTimeout(() => {
-                closeMeetingDetailsModal();
-                loadMeetings(); // Refresh the meetings list
-            }, 1500);
-        }
-    })
-    .catch(error => {
-        console.error('Error deleting meeting:', error);
-        alert('Fout bij verwijderen van vergadering');
-    });
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}

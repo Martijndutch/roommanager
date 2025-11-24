@@ -1,7 +1,7 @@
 # sv ARC Vergaderruimte Boekingssysteem
 ## Gebruikershandleiding
 
-**Versie:** 1.0  
+**Versie:** 2.0  
 **Datum:** November 2025
 
 ---
@@ -9,195 +9,289 @@
 ## Inhoudsopgave
 
 1. [Introductie](#introductie)
-2. [Inloggen](#inloggen)
-3. [Voor Normale Gebruikers](#voor-normale-gebruikers)
-   - [Dashboard Overzicht](#dashboard-overzicht)
-   - [Vergadering Boeken](#vergadering-boeken)
-   - [Vergadering Bekijken](#vergadering-bekijken)
-   - [Vergadering Wijzigen](#vergadering-wijzigen)
-   - [Vergadering Verwijderen](#vergadering-verwijderen)
-4. [Voor Beheerders](#voor-beheerders)
-   - [Admin Pagina Openen](#admin-pagina-openen)
-   - [Beschikbaarheid Instellen](#beschikbaarheid-instellen)
-   - [Tijdblokken Toevoegen](#tijdblokken-toevoegen)
-   - [Tijdblokken Aanpassen](#tijdblokken-aanpassen)
-   - [Tijdblokken Verwijderen](#tijdblokken-verwijderen)
-   - [Wijzigingen Opslaan](#wijzigingen-opslaan)
-5. [Kiosk Modus](#kiosk-modus)
-6. [SharePoint Integratie](#sharepoint-integratie)
-7. [Veelgestelde Vragen](#veelgestelde-vragen)
-8. [Contactinformatie](#contactinformatie)
+2. [Dashboard Overzicht](#dashboard-overzicht)
+3. [Vergadering Boeken](#vergadering-boeken)
+4. [Vergaderingen Beheren in Outlook](#vergaderingen-beheren-in-outlook)
+5. [QR Code Snelboeken](#qr-code-snelboeken)
+6. [Veelgestelde Vragen](#veelgestelde-vragen)
+7. [Tips & Trucs](#tips--trucs)
 
 ---
 
 ## Introductie
 
-Het sv ARC Vergaderruimte Boekingssysteem is een webapplicatie waarmee leden vergaderruimtes kunnen bekijken en reserveren. Het systeem is gekoppeld aan Microsoft Exchange en toont real-time beschikbaarheid van alle ruimtes.
+Het sv ARC Vergaderruimte Boekingssysteem toont real-time de beschikbaarheid van alle vergaderruimtes en biedt een snelle manier om ruimtes te reserveren. Het systeem is volledig geïntegreerd met Microsoft Outlook/Exchange.
 
 **Website:** https://svarc.100pctwifi.nl/arcrooms/
 
 **Beschikbare Ruimtes:**
 - Business Club
-- Bespreekruimte (Bestuur & Commissiekamer)
+- Ruimte: Bestuur & Commissiekamer
 - Kantine
 - Commissiekamer
 - Overleg veld 2
 
----
-
-## Inloggen
-
-### Stap 1: Open de Website
-Ga naar: **https://svarc.100pctwifi.nl/arcrooms/**
-
-### Stap 2: Inloggen
-- De pagina toont direct het dashboard met alle vergaderingen
-- Voor het **boeken** van ruimtes moet u inloggen
-- Klik op een beschikbaar tijdvak of gebruik de kloktijd rechtsboven
-- U wordt automatisch doorgestuurd naar de Microsoft inlogpagina
-
-### Stap 3: Microsoft Authenticatie
-- Log in met uw **sv ARC e-mailadres** (bijvoorbeeld: naam@svarc.nl)
-- Gebruik uw normale e-mail wachtwoord
-- Na succesvolle inlog wordt u teruggestuurd naar het dashboard
-
-> **Let op:** Alleen geautoriseerde sv ARC leden kunnen inloggen.
+> **Let op:** Voor het boeken van ruimtes moet u inloggen met uw sv ARC account. Het bekijken van de beschikbaarheid kan zonder inloggen.
 
 ---
 
-## Voor Normale Gebruikers
+## Dashboard Overzicht
 
-### Dashboard Overzicht
+Het dashboard bestaat uit drie secties die u helpen de bezetting van ruimtes in één oogopslag te zien:
 
-Na het openen van de website ziet u drie secties:
+### 1. Bezetting Ruimtes Vandaag (Linkerpaneel)
 
-#### 1. Vergaderingen Vandaag (Links)
-- Toont alle vergaderingen die **vandaag** gepland zijn
-- Per vergadering ziet u:
-  - **Tijd:** Starttijd - Eindtijd
-  - **Onderwerp:** Naam van de vergadering
-  - **Locatie:** Welke ruimte
-  - **Organisator:** Wie heeft de vergadering gepland
-- Klik op een vergadering om deze in Outlook te openen
+Hier ziet u alle vergaderingen van **vandaag**, gesorteerd op tijd:
 
-#### 2. Deze Week (Rechtsboven)
-- Kalenderoverzicht van de **komende 5 werkdagen**
-- Elke dag toont:
-  - Datum en dag van de week
-  - Aantal vergaderingen per dag
-  - Kleine preview van de vergaderingen
-- Klik op een dag om alle vergaderingen van die dag te zien
+**Wat u ziet:**
+- ⏰ **Tijd:** Wanneer de vergadering begint en eindigt
+- 📋 **Onderwerp:** Naam van de vergadering
+- 📍 **Locatie:** In welke ruimte
+- 👤 **Organisator:** Wie heeft de vergadering geboekt
+- ⏳ **(wacht op goedkeuring):** Als de ruimte nog moet worden goedgekeurd
 
-#### 3. Beschikbaarheid Komende 10 Dagen (Rechtsonder)
-- Raster met alle ruimtes en de komende 10 dagen
-- Kleuren betekenis:
-  - **Wit/Groen met ✓:** Geheel beschikbaar
-  - **Oranje met cijfer:** Gedeeltelijk bezet (aantal vergaderingen)
-  - **Rood met cijfer:** Volledig bezet
-  - **Grijs met X:** Gesloten (buiten werktijden)
-- Elk vak is verdeeld in drie tijdsecties:
-  - **Ochtend** (08:00 - 12:00)
-  - **Middag** (12:00 - 17:00)
-  - **Avond** (17:00 - 22:00)
+**Acties:**
+- Klik op een vergadering om deze in **Outlook** te openen
+- Daar kunt u details zien, deelnemen, of (als u organisator bent) de vergadering wijzigen
 
-> **Automatisch Verversen:** De pagina wordt elke 5 minuten automatisch ververst
+### 2. Deze Week (Rechtsboven)
+
+Een kalenderoverzicht van de **komende 5 werkdagen**:
+
+**Per dag ziet u:**
+- 📅 Datum en dag van de week
+- 🔢 Aantal vergaderingen
+- 📝 Korte preview van de eerste vergaderingen
+
+**Tip:** Klik op een dag om alle vergaderingen van die dag te bekijken.
+
+### 3. Beschikbaarheid Komende 7 Dagen (Rechtsonder)
+
+Een handig raster dat in één oogopslag laat zien wanneer ruimtes beschikbaar zijn:
+
+**Dagindeling:**
+- **Ochtend:** 08:00 - 12:00
+- **Middag:** 12:00 - 17:00  
+- **Avond:** 17:00 - 22:00
+
+**Kleurcode:**
+- ✅ **Wit/Groen met ✓:** Volledig beschikbaar
+- 🟧 **Oranje met cijfer:** Gedeeltelijk bezet (aantal vergaderingen)
+- 🟥 **Rood met cijfer:** Volledig bezet
+- ⬜ **Grijs met X:** Gesloten (buiten werktijden)
+
+**Snel boeken:** Klik op een beschikbaar (wit/groen) vak om direct een vergadering aan te vragen!
+
+### 4. QR Code voor Snelboeken
+
+Rechtsonder bij het beschikbaarheidsraster vindt u een QR code:
+- 📱 Scan met uw telefoon om snel een vergadering te boeken
+- 🖱️ Klik op de QR code om direct het boekingsformulier te openen
 
 ---
 
-### Vergadering Boeken
+## Vergadering Boeken
 
-#### Stap 1: Tijdslot Selecteren
-1. Klik op een **beschikbaar tijdvak** (wit of groen) in het beschikbaarheidsraster
-2. Als u niet ingelogd bent, wordt u gevraagd in te loggen
-3. Het boekingsformulier verschijnt
+### Stap 1: Kies Hoe u Wilt Boeken
 
-#### Stap 2: Gegevens Invullen
+U heeft drie opties:
 
-**Ruimte:** (Automatisch ingevuld)
-- De geselecteerde ruimte
+**Optie A: Via Beschikbaarheidsraster**
+1. Klik op een **beschikbaar vak** (wit of groen) in het raster
+2. De ruimte en datum worden automatisch ingevuld
 
-**Datum:** (Automatisch ingevuld)
-- De geselecteerde datum
+**Optie B: Via QR Code**
+1. Klik op de QR code rechtsonder
+2. Of scan met uw telefoon voor mobiel boeken
 
-**Starttijd:**
-- Selecteer een starttijd uit de dropdown
-- Alleen beschikbare tijden worden getoond
-- Tijden zijn in 30-minuten intervallen
+**Optie C: Direct via Outlook**
+1. Open Outlook
+2. Maak een nieuwe vergadering
+3. Voeg de gewenste ruimte toe als "Resource" of "Locatie"
 
-**Eindtijd:**
-- Selecteer een eindtijd uit de dropdown
-- Moet na de starttijd zijn
+> Deze handleiding richt zich op **Optie A en B** (via het dashboard). Voor Outlook-gebruikers: zie de sectie [Vergaderingen Beheren in Outlook](#vergaderingen-beheren-in-outlook).
+
+### Stap 2: Inloggen (indien nodig)
+
+Als u nog niet bent ingelogd:
+1. U wordt automatisch doorgestuurd naar de Microsoft inlogpagina
+2. Log in met uw **sv ARC e-mailadres** (bijv. naam@svarc.nl)
+3. Gebruik uw normale Outlook wachtwoord
+4. Na inloggen keert u terug naar het boekingsformulier
+
+### Stap 3: Boekingsformulier Invullen
+
+Het formulier toont:
+
+**Ruimte** (dropdown menu)
+- De door u geselecteerde ruimte is voorgeselecteerd
+- U kunt deze wijzigen door een andere ruimte te kiezen uit de lijst
+- De beschikbare tijdslots passen zich automatisch aan
+
+**Datum** (dropdown menu)
+- De geselecteerde datum is voorgeselecteerd
+- U kunt een andere datum kiezen uit de komende 14 dagen
+- De beschikbare tijdslots passen zich automatisch aan
+
+**Starttijd** (dropdown menu)
+- Selecteer wanneer de vergadering begint
+- Alleen **beschikbare** tijden worden getoond
+- Tijden zijn in 30-minuten intervallen (bijv. 09:00, 09:30, 10:00)
+
+**Eindtijd** (dropdown menu)  
+- Selecteer wanneer de vergadering eindigt
+- Moet **na** de starttijd zijn
 - Alleen tijden binnen de werktijden worden getoond
 
-**Onderwerp:** (Verplicht)
-- Geef de vergadering een duidelijke naam
-- Bijvoorbeeld: "Bestuursvergadering December"
-- Maximaal 255 karakters
+**Onderwerp** (verplicht)
+- Geef uw vergadering een duidelijke naam
+- Bijvoorbeeld: "Bestuursvergadering December" of "Teamoverleg Marketing"
+- Maximum 255 tekens
 
-**Notities:** (Optioneel)
-- Extra informatie over de vergadering
-- Bijvoorbeeld: "Agenda per e-mail verstuurd"
-- Maximaal 1000 karakters
+**Opmerking** (optioneel)
+- Extra informatie voor uzelf of deelnemers
+- Bijvoorbeeld: "Agenda volgt per e-mail" of "Laptops meenemen"
+- Maximum 1000 tekens
 
-#### Stap 3: Vergadering Aanmaken
-1. Controleer alle gegevens
-2. Klik op **"Vergadering Aanvragen"**
-3. Even geduld tijdens het verwerken
-4. Bij succes:
-   - Groene melding: "Vergadering succesvol aangevraagd"
-   - De vergadering wordt toegevoegd aan Exchange
-   - U ontvangt een e-mail bevestiging in Outlook
-5. Bij fout:
-   - Rode melding met foutbeschrijving
-   - Controleer de ingevoerde gegevens en probeer opnieuw
+### Stap 4: Vergadering Aanvragen
 
-#### Stap 4: Controle
-- De nieuwe vergadering verschijnt direct in het dashboard
-- Controleer of deze zichtbaar is in "Vergaderingen Vandaag" of "Deze Week"
-- De beschikbaarheid wordt direct bijgewerkt
+1. Controleer of alle gegevens correct zijn
+2. Klik op **"Vergadering Boeken"**
+3. Het systeem verwerkt uw aanvraag
 
-> **Let op:** Sommige ruimtes vereisen goedkeuring door een beheerder. U ontvangt een e-mail zodra de boeking is goedgekeurd of afgewezen.
+**Bij succes:**
+- ✅ Groene melding: "Vergadering succesvol geboekt!"
+- 📧 U ontvangt een uitnodiging in uw Outlook
+- 📅 De vergadering verschijnt in uw agenda
+- 🔄 Het dashboard wordt direct bijgewerkt
+
+**Bij fout:**
+- ❌ Rode melding met uitleg
+- Controleer de tijden (mogelijk al bezet)
+- Probeer een andere tijd of ruimte
+
+### Stap 5: Wat Gebeurt Er Nu?
+
+**Automatische acties:**
+1. De ruimte ontvangt uw aanvraag
+2. Afhankelijk van de ruimte:
+   - ✅ **Directe goedkeuring:** De ruimte is direct geboekt
+   - ⏳ **Handmatige goedkeuring:** Een beheerder moet eerst goedkeuren
+3. U ontvangt een Outlook-uitnodiging
+4. De vergadering verschijnt in uw agenda
+
+**Status in dashboard:**
+- Vergaderingen die nog op goedkeuring wachten tonen: **(wacht op goedkeuring)**
+- Goedgekeurde vergaderingen worden normaal getoond
 
 ---
+
+## Vergaderingen Beheren in Outlook
+
+Als u gewend bent om in Outlook te werken, kunt u daar uw vergaderingen volledig beheren.
+
+### Nieuwe Vergadering Maken in Outlook
+
+**Desktop Outlook:**
+1. Klik op **"Nieuwe vergadering"** of **"New Event"**
+2. Vul het onderwerp in
+3. Kies datum en tijd
+4. Bij **"Locatie"** of **"Rooms"**: Zoek en selecteer de vergaderruimte
+   - Type bijvoorbeeld "Business" om "Business Club" te vinden
+5. Voeg eventueel deelnemers toe
+6. Klik op **"Verzenden"**
+
+**Outlook Web (online):**
+1. Ga naar **Agenda** in Outlook Web
+2. Klik op **"Nieuwe gebeurtenis"**
+3. Vul gegevens in zoals hierboven
+4. Bij locatie: Klik op **"Ruimte zoeken"** of type de ruimtenaam
+5. Klik op **"Opslaan"** en **"Verzenden"**
+
+> **Voordeel Outlook:** U kunt direct deelnemers uitnodigen, bijlagen toevoegen en terugkerende vergaderingen maken.
 
 ### Vergadering Bekijken
 
-#### Methode 1: Via Dashboard
-1. Zoek de vergadering in "Vergaderingen Vandaag" of "Deze Week"
+**In Outlook:**
+1. Open uw **Agenda**
 2. Klik op de vergadering
-3. De vergadering opent in **Outlook Web** in een nieuw venster
-4. Hier ziet u alle details zoals deelnemers, agenda, etc.
+3. U ziet alle details: tijd, locatie, deelnemers, notities
 
-#### Methode 2: Via Outlook
-1. Open **Outlook** (desktop of web)
-2. Ga naar uw **Agenda**
-3. Zoek de vergadering in uw kalender
-4. Klik erop om alle details te zien
-
----
+**In Dashboard:**
+1. Klik op de vergadering in het linkerpaneel
+2. De vergadering opent in **Outlook Web**
+3. Alle details zijn daar te zien
 
 ### Vergadering Wijzigen
 
 > **Belangrijk:** U kunt alleen vergaderingen wijzigen die **u zelf heeft aangemaakt**.
 
-#### Optie 1: Via Dashboard (Alleen eigen vergaderingen)
-1. Zoek uw vergadering in het dashboard
-2. Klik op de vergadering
-3. Helaas is wijzigen via het dashboard momenteel niet beschikbaar
-4. Gebruik Outlook (zie Optie 2)
+**In Outlook:**
+1. Open de vergadering in uw agenda
+2. Klik op **"Bewerken"** of dubbelklik om te openen
+3. Wijzig wat u wilt:
+   - Tijd verschuiven
+   - Onderwerp aanpassen
+   - Andere ruimte kiezen
+   - Deelnemers toevoegen/verwijderen
+4. Klik op **"Update verzenden"**
+5. Wijzigingen worden direct doorgevoerd
 
-#### Optie 2: Via Outlook (Aanbevolen)
-1. Open **Outlook**
-2. Ga naar uw **Agenda**
-3. Open de vergadering
-4. Klik op **"Bewerken"**
-5. Wijzig de gewenste gegevens:
-   - Tijd
-   - Onderwerp
-   - Locatie
-   - Deelnemers
-6. Klik op **"Verzenden"** of **"Opslaan"**
-7. Wijzigingen worden direct doorgevoerd in het boekingssysteem
+**Wijzigingen zijn zichtbaar:**
+- Direct in uw Outlook agenda
+- Binnen 5 minuten in het dashboard
+- Deelnemers ontvangen een update-mail
+
+### Vergadering Annuleren
+
+**In Outlook:**
+1. Open de vergadering
+2. Klik op **"Annuleren"** of **"Verwijderen"**
+3. Kies of u een bericht naar deelnemers wilt sturen
+4. Bevestig de annulering
+
+**Gevolgen:**
+- De vergadering verdwijnt uit uw agenda
+- De ruimte wordt weer beschikbaar
+- Deelnemers ontvangen een annulering
+- Dashboard wordt binnen 5 minuten bijgewerkt
+
+### Terugkerende Vergaderingen
+
+U kunt terugkerende vergaderingen alleen via Outlook maken:
+
+1. Maak een nieuwe vergadering zoals normaal
+2. Klik op **"Herhaling"** of **"Recurrence"**
+3. Kies patroon:
+   - Dagelijks
+   - Wekelijks (bijv. elke maandag)
+   - Maandelijks (bijv. eerste dinsdag van de maand)
+4. Stel start- en einddatum in
+5. Voeg de ruimte toe
+6. Verzend de uitnodiging
+
+**Handig voor:**
+- Wekelijkse teamvergaderingen
+- Maandelijkse bestuursvergaderingen
+- Standaard overlegmomenten
+
+---
+
+## QR Code Snelboeken
+
+Voor snelle mobiele toegang is er een QR code in het dashboard.
+
+### Voor Mobiele Gebruikers
+
+**Stap 1: Scan de QR Code**
+1. Open de camera-app op uw telefoon
+2. Richt op de QR code rechtsonder in het dashboard
+3. Tik op de melding die verschijnt
+
+**Stap 2: Inloggen**
+- U wordt naar de inlogpagina geleid
+- Log in met uw sv ARC account
+- Mobile-friendly interface
 
 ---
 

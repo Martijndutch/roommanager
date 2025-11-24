@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 import os
 import re
-from html import escape
+from html import escape, unescape
 from threading import Lock
 
 app = Flask(__name__, static_url_path='/arcrooms/static')
@@ -263,19 +263,10 @@ def load_working_hours():
 
 def save_working_hours_to_file(room_email, working_hours):
     """Save working hours to local file"""
-    # cleanup2011 - debug logging
-    # print(f"[DEBUG] save_working_hours_to_file called for {room_email}", flush=True)
-    # print(f"[DEBUG] Working hours data: {json.dumps(working_hours, indent=2)}", flush=True)
     all_hours = load_working_hours()
-    # cleanup2011 - debug logging
-    # print(f"[DEBUG] Loaded existing hours for {len(all_hours)} rooms", flush=True)
     all_hours[room_email] = working_hours
-    # cleanup2011 - debug logging
-    # print(f"[DEBUG] Writing to file: {WORKING_HOURS_FILE}", flush=True)
     with open(WORKING_HOURS_FILE, 'w') as f:
         json.dump(all_hours, f, indent=2)
-    # cleanup2011 - debug logging
-    # print(f"[DEBUG] File written successfully", flush=True)
 
 
 
@@ -470,13 +461,6 @@ def admin_panel():
     return render_template('admin.html', user=user)
 
 
-# cleanup2011 - performance test page no longer needed
-# @app.get("/arcrooms/performance-test")
-# def performance_test():
-#     """Performance testing page for comparing sequential vs parallel loading"""
-#     return render_template('performance-test.html')
-
-
 # ---- Login endpoint ----
 @app.get("/arcrooms/login")
 def login():
@@ -610,6 +594,7 @@ def get_meetings():
                 }
                 
                 calendar_headers = headers.copy()
+                # Request Europe/Amsterdam times - Graph returns local time without Z
                 calendar_headers["Prefer"] = 'outlook.timezone="Europe/Amsterdam"'
                 
                 calendar_r = requests.get(calendar_url, headers=calendar_headers, params=params, timeout=10)
@@ -621,6 +606,10 @@ def get_meetings():
                 room_meetings = []
                 
                 for event in events:
+                    # Skip cancelled events
+                    if event.get("isCancelled", False):
+                        continue
+                    
                     subject = event.get("subject", "")
                     organizer = event.get("organizer", {}).get("emailAddress", {})
                     organizer_name = organizer.get("name", "")
@@ -695,22 +684,37 @@ def get_meetings():
                     if not subject or subject.strip() == "" or subject.strip() == organizer_name.strip():
                         subject = f"Bezet ({organizer_name})" if organizer_name else "Privé (onderwerp verborgen)"
                     
-                    # Get room resource response status from attendees
-                    room_response = "none"  # Default
-                    attendees = event.get("attendees", [])
-                    for attendee in attendees:
-                        attendee_email = attendee.get("emailAddress", {}).get("address", "").lower()
-                        if attendee_email == room_email.lower():
-                            room_response = attendee.get("status", {}).get("response", "none")
-                            break
+                    # Get room resource response status
+                    # First check responseStatus (when viewing from room's own calendar)
+                    room_response = "none"
+                    response_status = event.get("responseStatus", {})
+                    if response_status:
+                        room_response = response_status.get("response", "none")
+                    
+                    # If not found in responseStatus, check attendees list
+                    if room_response == "none":
+                        attendees = event.get("attendees", [])
+                        for attendee in attendees:
+                            attendee_email = attendee.get("emailAddress", {}).get("address", "").lower()
+                            if attendee_email == room_email.lower():
+                                room_response = attendee.get("status", {}).get("response", "none")
+                                break
+                    
+                    # Clean up datetime format (remove fractional seconds)
+                    start_dt = event.get("start", {}).get("dateTime", "")
+                    end_dt = event.get("end", {}).get("dateTime", "")
+                    if start_dt:
+                        start_dt = start_dt.split('.')[0]  # Remove fractional seconds
+                    if end_dt:
+                        end_dt = end_dt.split('.')[0]
                     
                     room_meetings.append({
                         "id": event_id,
                         "room": room.get("displayName"),
                         "roomEmail": room_email,
                         "subject": subject,
-                        "start": event.get("start", {}).get("dateTime"),
-                        "end": event.get("end", {}).get("dateTime"),
+                        "start": start_dt,
+                        "end": end_dt,
                         "status": event.get("showAs", "busy"),
                         "roomResponse": room_response,
                         "organizerEmail": organizer_email,
@@ -746,206 +750,23 @@ def get_meetings():
         # Cleanup expired cache entries
         cleanup_expired_cache()
         
-        return jsonify({"meetings": all_meetings, "count": len(all_meetings)})
+        # Deduplicate meetings by ID (same event can appear multiple times)
+        seen_ids = set()
+        unique_meetings = []
+        for meeting in all_meetings:
+            meeting_id = meeting.get("id")
+            if meeting_id and meeting_id not in seen_ids:
+                seen_ids.add(meeting_id)
+                unique_meetings.append(meeting)
+            elif not meeting_id:
+                # If no ID, keep it (shouldn't happen but be safe)
+                unique_meetings.append(meeting)
+        
+        return jsonify({"meetings": unique_meetings, "count": len(unique_meetings)})
     except Exception as e:
         print(f"Error in get_meetings: {str(e)}", flush=True)
         return jsonify({"error": str(e), "meetings": []}), 500
 
-
-# cleanup2011 - test endpoint - parallel loading now in main /api/meetings
-# # ---- API endpoint: get all meetings PARALLEL VERSION (TEST) ----
-# @app.get("/arcrooms/api/meetings-parallel")
-# def get_meetings_parallel():
-#     """
-#     TEST VERSION: Parallel loading of meeting data using ThreadPoolExecutor
-#     This should be significantly faster than the sequential version
-#     """
-#     try:
-#         start_time = time.time()
-#         token = get_token()
-#         headers = {
-#             "Authorization": f"Bearer {token}",
-#             "Content-Type": "application/json"
-#         }
-#         
-#         # Get all rooms
-#         rooms_url = f"{GRAPH_ENDPOINT}/places/microsoft.graph.room"
-#         rooms_r = requests.get(rooms_url, headers=headers, timeout=10)
-#         rooms_r.raise_for_status()
-#         
-#         all_rooms = {}
-#         for room in rooms_r.json().get("value", []):
-#             all_rooms[room["id"]] = room
-#         
-#         rooms_fetch_time = time.time()
-#         print(f"[PARALLEL] Rooms fetched in {rooms_fetch_time - start_time:.2f}s", flush=True)
-#         
-#         # Get schedules for next 10 days
-#         start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-#         end = start + timedelta(days=10)
-#         
-#         def fetch_room_calendar(room_id, room):
-#             """Fetch calendar for a single room"""
-#             room_email = room.get("emailAddress")
-#             if not room_email:
-#                 return []
-#             
-#             try:
-#                 calendar_url = f"{GRAPH_ENDPOINT}/users/{room_email}/calendar/calendarView"
-#                 params = {
-#                     "startDateTime": start.isoformat(),
-#                     "endDateTime": end.isoformat(),
-#                     "$select": "id,subject,start,end,showAs,body,organizer,location,isOrganizer,isCancelled,responseStatus,attendees,webLink",
-#                     "$top": 100
-#                 }
-#                 
-#                 calendar_headers = headers.copy()
-#                 calendar_headers["Prefer"] = 'outlook.timezone="Europe/Amsterdam"'
-#                 
-#                 calendar_r = requests.get(calendar_url, headers=calendar_headers, params=params, timeout=10)
-#                 
-#                 if calendar_r.status_code != 200:
-#                     return []
-#                 
-#                 events = calendar_r.json().get("value", [])
-#                 room_meetings = []
-#                 
-#                 for event in events:
-#                     subject = event.get("subject", "")
-#                     organizer = event.get("organizer", {}).get("emailAddress", {})
-#                     organizer_name = organizer.get("name", "")
-#                     organizer_email = organizer.get("address", "")
-#                     body_content = event.get("body", {}).get("content", "")
-#                     event_id = event.get("id")
-#                     is_organizer = event.get("isOrganizer", False)
-#                     
-#                     # Check if subject is hidden
-#                     subject_is_hidden = (not subject or subject.strip() == "" or subject.strip() == organizer_name.strip())
-#                     if subject_is_hidden and not is_organizer and organizer_email:
-#                         try:
-#                             # Try to get real subject from organizer's calendar
-#                             org_calendar_url = f"{GRAPH_ENDPOINT}/users/{organizer_email}/calendar/calendarView"
-#                             event_start = event.get("start", {}).get("dateTime")
-#                             event_end = event.get("end", {}).get("dateTime")
-#                             
-#                             try:
-#                                 event_dt_str = event_start.split('T')[0] if 'T' in event_start else event_start[:10]
-#                                 day_start = f"{event_dt_str}T00:00:00.0000000"
-#                                 day_end = f"{event_dt_str}T23:59:59.9999999"
-#                             except:
-#                                 day_start = event_start
-#                                 day_end = event_end
-#                             
-#                             org_params = {
-#                                 "startDateTime": day_start,
-#                                 "endDateTime": day_end,
-#                                 "$select": "id,subject,start,end,location,sensitivity",
-#                                 "$top": 100
-#                             }
-#                             org_headers = headers.copy()
-#                             org_headers["Prefer"] = 'outlook.timezone="Europe/Amsterdam"'
-#                             org_response = requests.get(org_calendar_url, headers=org_headers, params=org_params, timeout=5)
-#                             
-#                             if org_response.status_code == 200:
-#                                 org_events = org_response.json().get("value", [])
-#                                 
-#                                 for org_event in org_events:
-#                                     org_start = org_event.get("start", {}).get("dateTime")
-#                                     org_end = org_event.get("end", {}).get("dateTime")
-#                                     org_location = org_event.get("location", {})
-#                                     org_location_name = org_location.get("displayName", "") if isinstance(org_location, dict) else str(org_location)
-#                                     
-#                                     time_match = (org_start == event_start and org_end == event_end)
-#                                     room_display = room.get("displayName", "")
-#                                     location_match = room_display and room_display.lower() in org_location_name.lower()
-#                                     
-#                                     if time_match or location_match:
-#                                         org_subject = org_event.get("subject", "")
-#                                         org_sensitivity = org_event.get("sensitivity", "normal")
-#                                         
-#                                         if org_subject and org_subject.strip():
-#                                             if org_sensitivity == "private":
-#                                                 subject = f"Bezet ({organizer_name})" if organizer_name else "Bezet"
-#                                             else:
-#                                                 subject = f"{org_subject} ({organizer_name})" if (organizer_name and organizer_email != room_email) else org_subject
-#                                             break
-#                         except Exception as e:
-#                             print(f"Could not retrieve subject from organizer {organizer_email}: {str(e)}", flush=True)
-#                     
-#                     # Final fallback
-#                     if not subject or subject.strip() == "" or subject.strip() == organizer_name.strip():
-#                         subject = f"Bezet ({organizer_name})" if organizer_name else "Privé (onderwerp verborgen)"
-#                     
-#                     # Get room resource response status from attendees
-#                     room_response = "none"  # Default
-#                     attendees = event.get("attendees", [])
-#                     for attendee in attendees:
-#                         attendee_email = attendee.get("emailAddress", {}).get("address", "").lower()
-#                         if attendee_email == room_email.lower():
-#                             room_response = attendee.get("status", {}).get("response", "none")
-#                             break
-#                     
-#                     room_meetings.append({
-#                         "id": event_id,
-#                         "room": room.get("displayName"),
-#                         "roomEmail": room_email,
-#                         "subject": subject,
-#                         "start": event.get("start", {}).get("dateTime"),
-#                         "end": event.get("end", {}).get("dateTime"),
-#                         "status": event.get("showAs", "busy"),
-#                         "roomResponse": room_response,
-#                         "organizerEmail": organizer_email,
-#                         "organizerName": organizer.get("name", ""),
-#                         "body": body_content,
-#                         "isOrganizer": is_organizer
-#                     })
-#                 
-#                 return room_meetings
-#             except Exception as e:
-#                 print(f"Error processing room {room_email}: {str(e)}", flush=True)
-#                 return []
-#         
-#         # Fetch all room calendars in parallel
-#         all_meetings = []
-#         parallel_start = time.time()
-#         
-#         with ThreadPoolExecutor(max_workers=8) as executor:
-#             # Submit all tasks
-#             future_to_room = {
-#                 executor.submit(fetch_room_calendar, room_id, room): (room_id, room)
-#                 for room_id, room in all_rooms.items()
-#             }
-#             
-#             # Collect results as they complete
-#             for future in as_completed(future_to_room):
-#                 room_id, room = future_to_room[future]
-#                 try:
-#                     meetings = future.result()
-#                     all_meetings.extend(meetings)
-#                 except Exception as e:
-#                     print(f"Error fetching calendar for room {room.get('emailAddress')}: {str(e)}", flush=True)
-#         
-#         parallel_end = time.time()
-#         total_time = parallel_end - start_time
-#         fetch_time = parallel_end - parallel_start
-#         
-#         print(f"[PARALLEL] Calendars fetched in {fetch_time:.2f}s (parallel)", flush=True)
-#         print(f"[PARALLEL] Total time: {total_time:.2f}s", flush=True)
-#         print(f"[PARALLEL] Found {len(all_meetings)} meetings", flush=True)
-#         
-#         return jsonify({
-#             "meetings": all_meetings, 
-#             "count": len(all_meetings),
-#             "performance": {
-#                 "total_time": round(total_time, 2),
-#                 "rooms_fetch_time": round(rooms_fetch_time - start_time, 2),
-#                 "calendars_fetch_time": round(fetch_time, 2),
-#                 "rooms_count": len(all_rooms)
-#             }
-#         })
-#     except Exception as e:
-#         print(f"Error in get_meetings_parallel: {str(e)}", flush=True)
-#         return jsonify({"error": str(e), "meetings": []}), 500
 
 
 
@@ -1016,6 +837,8 @@ def request_meeting():
         # Validate all inputs
         try:
             room = validate_string(data.get('room'), 'Ruimte', max_length=100)
+            # Decode HTML entities (e.g., &amp; -> &)
+            room = unescape(room)
             date = validate_date(data.get('date'))
             start_time = validate_time(data.get('startTime'))
             end_time = validate_time(data.get('endTime'))
@@ -1110,6 +933,7 @@ def request_meeting():
             "Authorization": f"Bearer {user_token}",
             "Content-Type": "application/json"
         }
+        create_headers["Prefer"] = 'outlook.timezone="Europe/Amsterdam"'
         
         create_url = f"{GRAPH_ENDPOINT}/me/calendar/events"
         create_response = requests.post(create_url, json=calendar_event, headers=create_headers)
@@ -1869,243 +1693,15 @@ def cancel_meeting(event_id):
         return f"Fout: {str(e)}", 500
 
 
-# ---- API endpoint: get meeting details ----
-@app.get("/arcrooms/api/meeting/<event_id>")
-def get_meeting_details(event_id):
-    """Get details of a specific meeting"""
-    try:
-        user = session.get('user')
-        token = get_token()
-        
-        # Get room email from query param
-        room_email = request.args.get('room_email')
-        if not room_email:
-            return jsonify({"error": "room_email parameter required"}), 400
-        
-        try:
-            room_email = validate_email(room_email)
-        except ValueError as e:
-            return jsonify({"error": str(e)}), 400
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        # Get event details
-        event_url = f"{GRAPH_ENDPOINT}/users/{room_email}/calendar/events/{event_id}"
-        event_r = requests.get(event_url, headers=headers, timeout=10)
-        
-        if event_r.status_code != 200:
-            return jsonify({"error": "Vergadering niet gevonden"}), 404
-        
-        event = event_r.json()
-        organizer = event.get("organizer", {}).get("emailAddress", {})
-        
-        # Check permissions: delegates or organizer can edit/delete
-        can_edit = False
-        user_email = None
-        
-        if user:
-            user_email = user.get('preferred_username') or user.get('email') or user.get('userPrincipalName')
-            # Check if user is organizer
-            if user_email and organizer.get("address", "").lower() == user_email.lower():
-                can_edit = True
-            # Check if user is delegate
-            elif is_user_delegate(user_email, room_email, token):
-                can_edit = True
-        
-        return jsonify({
-            "id": event.get("id"),
-            "subject": event.get("subject"),
-            "start": event.get("start", {}).get("dateTime"),
-            "end": event.get("end", {}).get("dateTime"),
-            "body": event.get("body", {}).get("content", ""),
-            "organizerEmail": organizer.get("address", ""),
-            "organizerName": organizer.get("name", ""),
-            "roomEmail": room_email,
-            "canEdit": can_edit,
-            "userEmail": user_email
-        })
-        
-    except Exception as e:
-        print(f"Error in get_meeting_details: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+@app.get("/arcrooms/health")
+def health():
+    """Health check endpoint for monitoring and Azure App Service"""
+    return jsonify({"status": "ok", "time": datetime.now().isoformat()})
 
 
-# ---- API endpoint: update meeting ----
-@app.post("/arcrooms/api/meeting/<event_id>/update")
-def update_meeting(event_id):
-    """Update an existing meeting"""
-    try:
-        user = session.get('user')
-        if not user:
-            return jsonify({"error": "Inloggen verplicht"}), 401
-        
-        data = request.json
-        if not data:
-            return jsonify({"error": "Geen data ontvangen"}), 400
-        
-        room_email = data.get('roomEmail')
-        if not room_email:
-            return jsonify({"error": "room_email is required"}), 400
-        
-        # Validate inputs
-        try:
-            room_email = validate_email(room_email)
-            subject = validate_string(data.get('subject'), 'Onderwerp', min_length=3, max_length=255)
-            date = validate_date(data.get('date'))
-            start_time = validate_time(data.get('startTime'))
-            end_time = validate_time(data.get('endTime'))
-            notes = validate_string(data.get('notes', ''), 'Opmerking', max_length=1000, allow_empty=True)
-        except ValueError as e:
-            return jsonify({"error": f"Validatiefout: {str(e)}"}), 400
-        
-        # Validate time range
-        try:
-            start_dt = datetime.strptime(start_time, '%H:%M')
-            end_dt = datetime.strptime(end_time, '%H:%M')
-            if end_dt <= start_dt:
-                return jsonify({"error": "Eindtijd moet na starttijd zijn"}), 400
-        except ValueError:
-            return jsonify({"error": "Ongeldige tijdnotatie"}), 400
-        
-        token = get_token()
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        # Get existing event to check permissions
-        event_url = f"{GRAPH_ENDPOINT}/users/{room_email}/calendar/events/{event_id}"
-        event_r = requests.get(event_url, headers=headers, timeout=10)
-        
-        if event_r.status_code != 200:
-            return jsonify({"error": "Vergadering niet gevonden"}), 404
-        
-        event = event_r.json()
-        organizer = event.get("organizer", {}).get("emailAddress", {}).get("address", "")
-        user_email = user.get('preferred_username') or user.get('email') or user.get('userPrincipalName')
-        
-        # Check permissions: user must be organizer or delegate
-        can_edit = False
-        if user_email and organizer.lower() == user_email.lower():
-            can_edit = True
-        elif is_user_delegate(user_email, room_email, token):
-            can_edit = True
-        
-        if not can_edit:
-            return jsonify({"error": "Geen toestemming om deze vergadering te wijzigen"}), 403
-        
-        # Check working hours
-        working_hours_check = check_working_hours(room_email, date, start_time, end_time, token)
-        if not working_hours_check["allowed"]:
-            return jsonify({"error": working_hours_check["message"]}), 400
-        
-        # Update the event
-        event_start = f"{date}T{start_time}:00"
-        event_end = f"{date}T{end_time}:00"
-        
-        update_data = {
-            "subject": subject,
-            "start": {
-                "dateTime": event_start,
-                "timeZone": "Europe/Amsterdam"
-            },
-            "end": {
-                "dateTime": event_end,
-                "timeZone": "Europe/Amsterdam"
-            },
-            "body": {
-                "contentType": "HTML",
-                "content": f"""
-                <p><strong>Ruimte:</strong> {room_email}</p>
-                <p><strong>Aangepast door:</strong> {user.get('name')} ({user_email})</p>
-                {f'<p><strong>Opmerking:</strong> {notes}</p>' if notes else ''}
-                """
-            }
-        }
-        
-        update_r = requests.patch(event_url, json=update_data, headers=headers, timeout=10)
-        
-        if update_r.status_code not in [200, 204]:
-            error_msg = update_r.json().get('error', {}).get('message', 'Onbekende fout')
-            return jsonify({"error": f"Fout bij bijwerken: {error_msg}"}), 500
-        
-        return jsonify({
-            "success": True,
-            "message": "Vergadering succesvol bijgewerkt"
-        })
-        
-    except Exception as e:
-        print(f"Error in update_meeting: {str(e)}")
-        return jsonify({"error": str(e)}), 500
 
 
-# ---- API endpoint: delete meeting ----
-@app.post("/arcrooms/api/meeting/<event_id>/delete")
-def delete_meeting(event_id):
-    """Delete a meeting"""
-    try:
-        user = session.get('user')
-        if not user:
-            return jsonify({"error": "Inloggen verplicht"}), 401
-        
-        data = request.json
-        if not data:
-            return jsonify({"error": "Geen data ontvangen"}), 400
-        
-        room_email = data.get('roomEmail')
-        if not room_email:
-            return jsonify({"error": "room_email is required"}), 400
-        
-        try:
-            room_email = validate_email(room_email)
-        except ValueError as e:
-            return jsonify({"error": str(e)}), 400
-        
-        token = get_token()
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        # Get existing event to check permissions
-        event_url = f"{GRAPH_ENDPOINT}/users/{room_email}/calendar/events/{event_id}"
-        event_r = requests.get(event_url, headers=headers, timeout=10)
-        
-        if event_r.status_code != 200:
-            return jsonify({"error": "Vergadering niet gevonden"}), 404
-        
-        event = event_r.json()
-        organizer = event.get("organizer", {}).get("emailAddress", {}).get("address", "")
-        user_email = user.get('preferred_username') or user.get('email') or user.get('userPrincipalName')
-        
-        # Check permissions: user must be organizer or delegate
-        can_delete = False
-        if user_email and organizer.lower() == user_email.lower():
-            can_delete = True
-        elif is_user_delegate(user_email, room_email, token):
-            can_delete = True
-        
-        if not can_delete:
-            return jsonify({"error": "Geen toestemming om deze vergadering te verwijderen"}), 403
-        
-        # Delete the event
-        delete_r = requests.delete(event_url, headers=headers, timeout=10)
-        
-        if delete_r.status_code not in [200, 204]:
-            error_msg = delete_r.json().get('error', {}).get('message', 'Onbekende fout') if delete_r.text else 'Onbekende fout'
-            return jsonify({"error": f"Fout bij verwijderen: {error_msg}"}), 500
-        
-        return jsonify({
-            "success": True,
-            "message": "Vergadering succesvol verwijderd"
-        })
-        
-    except Exception as e:
-        print(f"Error in delete_meeting: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+
 
 
 if __name__ == "__main__":
